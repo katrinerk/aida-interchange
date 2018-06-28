@@ -44,13 +44,13 @@ if len(ldc_obj.mention_hypothesis) == 0:
     sys.exit(1)
 
 conflict_obj = Conflicting.ConflictingEvidence(mygraph_obj.mygraph, ldc_obj)
-# conflict_obj.detect_conflicting_paths()
-# print("#entries:", len(conflict_obj.conflict_path))
+conflict_obj.detect_conflicting_paths()
+print("#entries:", len(conflict_obj.conflict_path))
 
 
-## # print conflict paths
-# conflict_obj.print_conflict_paths()
+# print conflict paths
+conflict_obj.print_conflict_paths()
 
 ## # for each hypothesis, determine supporting and conflicting evidence
-conflict_obj.detect_pro_and_con_evidence()
-conflict_obj.print_procon_evidence()
+# conflict_obj.detect_pro_and_con_evidence()
+# conflict_obj.print_procon_evidence()
