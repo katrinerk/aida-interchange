@@ -1,7 +1,5 @@
 # Read human-readable info on LDC AIDA annotation
 # and integrate it with a GAIA graph.
-# also, read a whole directory full of LDC annotation in GAIA format
-# and record which information came from which file
 
 import sys
 import os
@@ -95,58 +93,20 @@ class LDCAnno:
 ###############################################
 # read in all GAIA-format annotation from a whole scenario,
 # and remember which information was in which file
-class OneScenarioAnno:
-    def __init__(self, scenariodir):
-        self.scenariodir = scenariodir
+def read_ldc_gaia_annotation(scenariodir):
+    indircontents = os.listdir(scenariodir)
 
-        self.read_ldc_gaia_annotation()
+    mygraph = AidaGraph()
+    
+    for filename in indircontents:
+        if filename.endswith(".ttl") and not(filename.endswith(".all.ttl")):
+            print("adding", filename)
+            filepath = os.path.join(scenariodir, filename)
+            g = rdflib.Graph()
+            result = g.parse(filepath, format = "ttl")
 
-        # given a directory with GAIA interface format representations of LDC annotation
-    # for a particular scenario,
-    # read in all the individual files (but not the .all.ttl) and store them in a joint AidaGraph.
-    # return the AidaGraph object
-    def read_ldc_gaia_annotation(self):
-        indircontents = os.listdir(self.scenariodir)
+            # add to the AidaGraph
+            mygraph.add_graph(g)
 
-        self.mygraph = AidaGraph()
-        # mapping from source (filename root) to lists of entities, events, statements that occur in 
-        self.source = { }
-
-        for filename in indircontents:
-            if filename.endswith(".ttl") and not(filename.endswith(".all.ttl")):
-                print("adding", filename)
-                filepath = os.path.join(self.scenariodir, filename)
-                g = rdflib.Graph()
-                result = g.parse(filepath, format = "ttl")
-                filenameroot, filenamext = os.path.splitext(filename)
-
-                # add to the AidaGraph
-                self.mygraph.add_graph(g)
-                # list what was in that source
-                self.source[ filenameroot] = self.describe_source(g)
-
-    def describe_source(self, rdflibgraph):
-        # these are the labels of node described in this subgraph
-        nodelabels = set([ subj for subj, pred, obj in rdflibgraph])
-
-        # find events, entities, other things in this source
-        events = [ ]
-        entities = [ ]
-        statements = [ ]
-
-        for nl in nodelabels:
-            node = self.mygraph.node_labeled(nl)
-            if "Event" in node.get("type", shorten = True):
-                events.append(nl)
-            elif "Entity" in node.get("type", shorten = True):
-                entities.append(nl)
-            elif "Statement" in node.get("type", shorten = True):
-                statements.append(nl)
-            else:
-                # do not record stuff that is not an entity,an event, or a statement for now
-                pass
-
-        return { "entities" : entities, "events" : events, "statements" : statements }
-        
-
+    return mygraph
 

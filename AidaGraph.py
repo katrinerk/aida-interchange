@@ -16,13 +16,6 @@ class AidaNode(RDFNode):
         RDFNode.__init__(self, nodename)
         self.description = None
 
-
-    # return set of confidence levels for this node
-    def confidencelevels(self):
-        confvalues = self.get("confidenceValue")
-        return set([float(c) for c in confvalues])
-
-
     def add_description(self, description):
         self.description = description
 
@@ -38,19 +31,13 @@ class AidaNode(RDFNode):
 # info classes: returned by AidaGraph,
 # include node info as well as pre-parsed domain-specific info
 
-# a typing statement, and its accompanying confidence
+# a typing statement
 class AidaTypeInfo:
-    def __init__(self, typenode, allnode_dict):
+    def __init__(self, typenode):
         # type label
         self.typenode = typenode
         self.typelabels = self.typenode.get("object", shorten = True)
 
-        # confidence value
-        confnodelabels = self.typenode.get("confidence")
-        self.confidenceValues = set()
-        for clabel in confnodelabels:
-            if clabel in allnode_dict:
-                self.confidenceValues = self.confidenceValues.union(allnode_dict[clabel].confidencelevels())
 
 # a KB entry
 class AidaKBEntryInfo:
@@ -86,9 +73,9 @@ class AidaWhoisInfo:
 
     # for each type of this ere, keep only the maximum observed confidence level,
     # but do be prepared to keep multiple types
-    def add_type(self, typeobj):
+    def add_type(self, typeobj, conflevels):
         for typelabel in typeobj.typelabels:
-            self.type_info[typelabel] = max(max(typeobj.confidenceValues), self.type_info.get(typelabel, 0))
+            self.type_info[typelabel] = max(max(conflevels), self.type_info.get(typelabel, 0))
 
     def add_kbentry(self, kbobj):
         self.kb_info = self.kb_info.union(kbobj.kbentry)
@@ -151,10 +138,22 @@ class AidaGraph(RDFGraph):
             if targettype is None or targettype in node.get("type")  or targettype in node.get("type", shorten = True):
                 yield node
 
+    # confidence level associated with a node. node given by its name
+    def confidence_of(self, nodename):
+        if nodename not in self.node:
+            return None
+        confnodelabels = self.node[nodename].get("confidence")
+        
+        confidenceValues = set()
+        for clabel in confnodelabels:
+            if clabel in self.node:
+                confidenceValues.update( float(c) for c in self.node[clabel].get("confidenceValue"))
+
+        return confidenceValues
+
     # iterator over types for a particular entity/event/relation
     # yields AidaTypeInfo objects that
-    # give access ot the whole typing node, as well as the type and its
-    # confidence.
+    # give access ot the whole typing node
     def types_of(self, obj):
         if obj in self.node:
             for pred, subjs in self.node[obj].inedge.items():
@@ -162,7 +161,7 @@ class AidaGraph(RDFGraph):
                     if subj in self.node:
                         subjnode = self.node[subj]
                         if "type" in subjnode.get("predicate", shorten = True) and obj in subjnode.get("subject"):
-                            yield AidaTypeInfo(subjnode, self.node)
+                            yield AidaTypeInfo(subjnode)
 
     # knowledge base entries of a node
     def kbentries_of(self, obj):
@@ -185,7 +184,23 @@ class AidaGraph(RDFGraph):
                         if plabel in self.node:
                             mentionstrings = self.node[plabel].get("jsonContent")
                             for mentionstring in mentionstrings:
-                                yield json.loads(mentionstring)["mention"]
+                                jobj = json.loads(mentionstring)
+                                if "mention" in jobj:
+                                    yield jobj["mention"]
+
+    # source for a node
+    def sources_associated_with(self, subj):
+        if subj in self.node:
+            private_data = self.node[subj].get("privateData")
+            for plabel in private_data:
+                if plabel in self.node:
+                    strings = self.node[plabel].get("jsonContent")
+                    for s in strings:
+                        jobj = json.loads(s)
+                        if "provenance" in jobj:
+                            for p in jobj["provenance"]:
+                                yield p
+                        
                             
             
                 
@@ -220,7 +235,7 @@ class AidaGraph(RDFGraph):
         # we do have an entry for this node.
         # determine its types
         for type_obj in self.types_of(nodelabel):
-            whois_obj.add_type(type_obj)
+            whois_obj.add_type(type_obj, self.confidence_of(type_obj.typenode))
 
         # determine KB entries
         for kb_obj in self.kbentries_of(nodelabel):
@@ -288,6 +303,3 @@ class AidaGraph(RDFGraph):
                     nodelabels_to_visit.put( (neighbor_obj.neighbornodelabel, current_path + [neighbor_obj]) )
                     for v in visited: edges_visited.add(v)
 
-
-
-        

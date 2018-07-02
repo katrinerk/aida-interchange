@@ -31,19 +31,19 @@ if len(sys.argv) != 3:
 # read in the LDC annotation
 indir = sys.argv[1]
 
-mygraph_obj = AnnoExplore.OneScenarioAnno(indir)
+mygraph = AnnoExplore.read_ldc_gaia_annotation(indir)
 
-print("number of nodes:", len(mygraph_obj.mygraph.node))
+print("number of nodes:", len(mygraph.node))
 
 # read in the LDC hypothesis info
 ldcdir = sys.argv[2]
 
-ldc_obj = AnnoExplore.LDCAnno(ldcdir, mygraph_obj.mygraph)
+ldc_obj = AnnoExplore.LDCAnno(ldcdir, mygraph)
 if len(ldc_obj.mention_hypothesis) == 0:
     print("could not find hypothesis file")
     sys.exit(1)
 
-conflict_obj = Conflicting.ConflictingEvidence(mygraph_obj.mygraph, ldc_obj)
+conflict_obj = Conflicting.ConflictingEvidence(mygraph, ldc_obj)
 conflict_obj.detect_conflicting_paths()
 print("#entries:", len(conflict_obj.conflict_path))
 

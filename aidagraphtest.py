@@ -23,14 +23,6 @@ for node in mygraph.nodes():
     print(node.shortname(), ",".join(node.get("type", shorten = True)))
 input("hit enter")
     
-# find all confidence levels
-print("Printing confidence levels")
-input("hit enter")
-for node in mygraph.nodes(targettype = "Confidence"):
-    print(",".join(str(c) for c in node.confidencelevels()))
-input("hit enter")
-
-
 # find all type statements for each node
 print("Printing type statements")
 input("hit enter")
@@ -40,7 +32,7 @@ for node in mygraph.nodes():
         if not node_printed:
             print("node", node.shortname())
             node_printed = True
-        print("\t type", ",".join(typeobj.typelabels), "at confidence", ",".join(str(c) for c in typeobj.confidenceValues))
+        print("\t type", ",".join(typeobj.typelabels), "at confidence", ",".join(str(c) for c in mygraph.confidence_of(typeobj.typenode.name)))
 input("hit enter")
 
 # write out all nodes
