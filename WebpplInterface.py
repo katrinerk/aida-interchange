@@ -9,102 +9,70 @@ import sys
 import os
 import rdflib
 import csv
+import json
 from first import first
-import pickle
 from AidaGraph import AidaGraph, AidaNode
 import AnnoExplore
 
-#####
-# given an AidaGraph, write out all of its entities, events, and statements
-# into a webppl structure
-def wppl_write_graph(mygraph, pipe):
-    # start of data structure
-    print('var theGraph = {', file = pipe)
-    
-    # entities
-    for node in mygraph.nodes():
-        # entities, events: they only have a type
-        if "Entity" in node.get("type", shorten = True):
-            print("\t\"" + str(node.name) + "\" : { type : \"Entity\" },", file = pipe)
-        elif "Event" in node.get("type", shorten = True):
-            print("\t\"" + str(node.name) + "\" : { type : \"Event\" },", file = pipe)
-
-        # statements have a single subj, pred, obj, a maximal confidence level, and possibly mentions
-        elif "Statement" in node.get("type", shorten = True):
-            print("\t\"" + str(node.name) + "\" : {", file = pipe)
-            print("\ttype : \"Statement\", ", file = pipe)
-
-            # subj, pred, obj
-            for label in ["subject", "predicate", "object"]:
-                content = node.get(label, shorten = True)
-                if len(content) > 0:
-                    print("\t" + label + " :", "\"" + str(content.pop()) + "\",", file = pipe)
-
-            # confidence
-            conflevels = mygraph.confidence_of(node.name)
-            if len(conflevels) > 0:
-                print("\tconf :", max(conflevels), ",", file = pipe)
-
-            # mentions
-            mentions = list(mygraph.mentions_associated_with(node.name))
-            if len(mentions) > 0:
-                print("\tmentionID : [", ",".join("\"" + str(m) + "\"" for m in mentions), "],", file = pipe)
-
-            # done
-            print("\t},", file = pipe)
-
-    # all done
-    print("}", file = pipe)
-
-                    
-            
 
 ###########
-# Given an AidaGraph, compute and manage units for clustering
-class WpplUnits:
+# Given an AidaGraph, transform it into input for WebPPL analysis:
+# * re-encode the graph,
+# * compute units for clustering,
+# * compute pairwise distances between units
+class WpplInterface:
     def __init__(self, mygraph):
         self.mygraph = mygraph
-
-        # units: each unit is a list of statement node names
-        self.units = self._compute_units()
         
-        # node distances
+        self.json_obj = { }
+
+        # re-encode the graph
+        self.json_obj["theGraph"] = self._transform_graph()
+        # compute units
+        self.units = [ ]
+        self.json_obj["units"] = self._compute_units()
+        # and pairwise unit distances. we consider maximal distances of 5.
         self.dist = { }
         self.maxdist = 5
-
-    ####
-    # write units in webppl format
-    def write_units(self, pipe):
-        print("var units = [", file = pipe)
         
-        for unit in self.units:
-            print("\t[", ",".join("\"" + str(n) + "\"" for n in unit), "],", file = pipe)
+        self.json_obj["unitDistances"] = self._compute_distances()
 
-        print("]", file = pipe)
+    def write(self, io):
+        json.dump(self.json_obj, io, indent = 1)
 
-    ####
-    # write unit distances in webppl format:
-    # list of lists, where the first list contains the distances of unit 0 to all other units,
-    # the second list contains the distances of unit 1 to all units of index 2 or higher.
-    # and so on.
-    def write_unit_distances(self, pipe):
-        # get pairwise node distances
-        self.compute_node_distances()
+    ###########3
+    # functions that are actually doing the work
+    
+    def _transform_graph(self):
+        retv = { }
+        
+        # we write out statements, events, entities
+        for node in self.mygraph.nodes():
+            # entities, events: they only have a type
+            if "Entity" in node.get("type", shorten = True):
+                retv[ node.shortname() ] = { "type" : "Entity" }
+            elif "Event" in node.get("type", shorten = True):
+                retv[ node.shortname() ] = { "type" : "Event" }
+            # statements have a single subj, pred, obj, a maximal confidence level, and possibly mentions
+            elif "Statement" in node.get("type", shorten = True):
+                # type
+                retv[ node.shortname() ] = { "type" : "Statement"}
 
-        # write out unit distances
-        print("var dpDistances = [", file = pipe)
+                # predicate, subject, object
+                for label in ["predicate", "subject", "object"]:
+                    content = node.get(label, shorten = True)
+                    if len(content) > 0:
+                        retv[node.shortname()][label] = str(content.pop())                        
 
-        for i in range(len(self.units) - 1):
-            print("\t[", file = pipe)
-            print("\t", ", ".join( str(self._unit_distance(i, j)) for j in range(i+1, len(self.units))), file = pipe)
-            print("\t],", file = pipe)
+                # confidence
+                conflevels = self.mygraph.confidence_of(node.name)
+                if len(conflevels) > 0:
+                    retv[ node.shortname()]["conf"] = max(conflevels)
 
-        print("]", file = pipe)
-            
+        return retv
 
-    ######3
     # compute the units for clustering, return as a list of sets of node names
-    # currently, units are groups of statements that share the same mention
+    # units are groups of statements that share the same mention
     def _compute_units(self):
         mention_stmt = { }
         
@@ -113,22 +81,42 @@ class WpplUnits:
             # these are two different mentions justifying a statement.
             # so just list the statement as belonging to both.
             for mention in self.mygraph.mentions_associated_with(node.name):
-                if mention not in mention_stmt: mention_stmt[mention] = set()
-                mention_stmt[mention].add(node.name)
+                if mention not in mention_stmt:
+                    mention_stmt[mention] = [ ]
+                if node.name not in mention_stmt[mention]:
+                    mention_stmt[mention].append(node.name)
 
-        return list(mention_stmt.values())
+        # in units, retain full names of unit members
+        self.units = list(mention_stmt.values())
         
-
-
-    ########3
-    # distance between two units: minimum node distance between them
-    def _unit_distance(self, i1, i2):
-        return min(self.getdist( label1, label2) for label1 in self.units[i1] for label2 in self.units[i2])
+        # in the json object, use short names
+        somenode = first(self.mygraph.node.values())
+        return list(map(lambda unit: [ somenode.shortlabel(e) for e in unit ], self.units))
         
-    # distance: compute pairwise distances between graph nodes.
+                    
+       
+    # compute the distances between units.
+    # return as a list of lists,
+    # where the first list contains the distances of unit 0 to all other units,
+    # the second list contains the distances of unit 1 to all units of index 2 or higher.
+    # and so on.
+    def _compute_distances(self):
+        # get pairwise node distances
+        self._compute_node_distances()
+
+        # compute unit distances
+        retv = [ ]
+        
+        for i in range(len(self.json_obj["units"]) - 1):
+            retv.append( [ self._unit_distance(i, j) for j in range(i+1, len(self.units)) ] )
+
+        return retv
+ 
+
+    # compute pairwise distances between graph nodes.
     # only start at statements, and go maximally self.maxdist nodes outward from each statement
     # don't use Floyd-Warshall, it's too slow with this many nodes
-    def compute_node_distances(self):
+    def _compute_node_distances(self):
         # target data structure:
         # (nodename1, nodename2) -> distance
         # where nodename1 is alphabetically before nodename2
@@ -136,7 +124,6 @@ class WpplUnits:
 
         # we only do statement nodes.
         labels = [ k for k, n in self.mygraph.node.items() if "Statement" in n.get("type", shorten = True)]
-        print("Statement nodes:", len(labels))
         # we step through neighbors that are event or entities too
         visitlabels = set([ k for k, n in self.mygraph.node.items() if len(n.get("type", shorten=True).intersection({"Statement", "Event", "Entity"})) > 0])
 
@@ -149,11 +136,17 @@ class WpplUnits:
             while dist < self.maxdist:
                 newfringe = set()
                 for obj in fringe:
+                    if obj == subj: continue
                     self.dist[ self._nodepair(subj, obj)] = min( self.getdist(subj, obj), dist)
                     newfringe.update(self._valid_neighbors(obj, visitlabels))
                 fringe = newfringe
                 dist += 1
+                
 
+    # distance between two units: minimum node distance between them
+    def _unit_distance(self, i1, i2):
+        return min(self.getdist( label1, label2) for label1 in self.units[i1] for label2 in self.units[i2])
+        
     # helper functions for node_distances
     def getdist(self, l1, l2):
         if l1 == l2:
@@ -172,46 +165,4 @@ class WpplUnits:
         for nset in self.mygraph.node[nodelabel].outedge.values(): retv.update(nset)
         for nset in self.mygraph.node[nodelabel].inedge.values(): retv.update(nset)
         return retv.intersection(visitlabels)
-    
-    
 
-    ## # distance: compute pairwise distances between graph nodes.
-    ## # Floyd-Warshall algorithm
-    ## def compute_node_distances(self):
-    ##     # target data structure:
-    ##     # (nodename1, nodename2) -> distance
-    ##     # where nodename1 is alphabetically before nodename2
-    ##     self.dist = { }
-
-    ##     # we only do event, entity, and statement nodes.
-    ##     labels = [ k for k, n in self.node.items() if len(n.get("type", shorten = True).intersection(["Statement", "Event", "Entity"])) > 0 ]
-        
-    ##     # initialize by neighbor distances of 1.
-    ##     # (initialization of self-distance to zero is automatic with getdist
-    ##     for subj in labels:
-    ##         for objs in self.node[subj].outedge.values():
-    ##             for obj in objs:
-    ##                 if obj in labels:
-    ##                     self.dist[ self._nodepair(subj, obj)]= 1
-
-    ##     # main loop
-    ##     for i in range(len(labels)):
-    ##         for j in range(len(labels)):
-    ##             for k in range(len(labels)):
-    ##                 if self.getdist(labels[i], labels[j]) > self.getdist(labels[i], labels[k]) + self.getdist(labels[k], labels[j]):
-    ##                     self.dist[ self._nodepair( labels[i], labels[j]) ] = self.getdist(labels[i], labels[k]) + self.getdist(labels[k], labels[j])
-
-    ## # helper functions for node_distances
-    ## def getdist(self, l1, l2):
-    ##     if l1 == l2:
-    ##         return 0
-    ##     elif l1 < l2 and (l1, l2) in self.dist:
-    ##         return self.dist[ (l1, l2) ]
-    ##     elif l2 < l1 and (l2, l1) in self.dist:
-    ##         return self.dist[ (l2, l1) ]
-    ##     else: return float("inf")
-
-    ## def _nodepair(self, l1, l2):
-    ##     return tuple(sorted([l1, l2]))
-    
-    
