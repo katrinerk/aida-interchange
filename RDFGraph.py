@@ -81,10 +81,7 @@ class RDFNode:
         self.name = nodename
         self.outedge = { }
         self.inedge = { }
-        self.source = set()
 
-    def add_source(self, source):
-        self.source.add(source)
 
     # adding a pred/obj pair
     def add(self, pred, obj):
@@ -109,10 +106,7 @@ class RDFNode:
 
     # prettyprint: write the node name, and all pred/object pairs, all in short form
     def prettyprint(self, omit = None):
-        if len(self.source) > 0:
-            print(self.shortname(), "from", ", ".join(self.source))
-        else:
-            print(self.shortname())
+        print(self.shortname())
         for pred, obj in self.outedge.items():
             if omit is None or self.shortlabel(pred) not in omit:
                 print("\t", self.shortlabel(pred), ":", " ".join(self.shortlabel(o) for o in obj))
@@ -140,29 +134,18 @@ class RDFGraph:
         self.nodeclass = nodeclass
 
     # adding another RDF file to the graph of this object
-    def add_graph(self, rdflibgraph, source = None):
-        # record the set of nodes that are described in rdflibgraph
-        new_nodes = set()
-        # for each new node, record all its outgoing edges
+    def add_graph(self, rdflibgraph):
+        # for each new triple, record it
         for subj, pred, obj in rdflibgraph:
+            
             if subj not in self.node:
                 self.node[subj] = self.nodeclass(subj)
-                new_nodes.add(subj)
 
+            if obj not in self.node:
+                self.node[obj] = self.nodeclass(obj)
+                
             self.node[subj].add(pred, obj)
-            if source is not None: self.node[subj].add_source(source)
-
-            # record the same edge as incoming edge for the obj
-            if obj in self.node:
-                self.node[obj].add_inedge(pred, subj)
-
-        # record edges from existing nodes to new nodes
-        # as inedges on the new nodes
-        for subj in self.node:
-            if subj not in new_nodes:
-                for pred, obj in self.node[subj].outedge.items():
-                    if obj in new_nodes:
-                        self.node[obj].add_inedge(pred, subj)
+            self.node[obj].add_inedge(pred, subj)
 
 
     # printing out the graph in readable form

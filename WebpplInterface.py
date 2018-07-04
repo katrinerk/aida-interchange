@@ -72,11 +72,21 @@ class WpplInterface:
         return retv
 
     # compute the units for clustering, return as a list of sets of node names
-    # units are groups of statements that share the same mention
+    # units are groups of statements that share the same mention.
+    # for entities and events that only have a single type of KB entry,
+    # the type and KB entry statements go into all units that mention the entity/event
+    # and do not go into a separate unit.
     def _compute_units(self):
+        
+        ee_statements, nonunit_statements = self._types_and_kbentries()
+        
         mention_stmt = { }
         
         for node in self.mygraph.nodes("Statement"):
+            # skip this statement?
+            if node.name in nonunit_statements:
+                continue
+            
             # Whenever there is more than one mention associated with a statement,
             # these are two different mentions justifying a statement.
             # so just list the statement as belonging to both.
@@ -87,13 +97,71 @@ class WpplInterface:
                     mention_stmt[mention].append(node.name)
 
         # in units, retain full names of unit members
-        self.units = list(mention_stmt.values())
+        # add in typing and kb entry statements as appropriate
+        self.units = [ ]
+        for unit in mention_stmt.values():
+            ## print("Statements")
+            ## for stmtlabel in unit: self.mygraph.node_labeled(stmtlabel).prettyprint()
+            # determine entities and events mentioned in the unit
+            ee = set()
+            for stmtlabel in unit:
+                n = self.mygraph.node_labeled(stmtlabel)
+                for label in n.get("subject"):
+                    if label in self.mygraph.node: ee.add(label)
+                for label in n.get("object"):
+                    if label in self.mygraph.node: ee.add(label)
+
+            new_unit = set(unit)
+            for e in ee:
+                if e in ee_statements:
+                    new_unit.update(ee_statements[e])
+
+            ## print("\n\nadding")
+            ## for stmtlabel in new_unit: self.mygraph.node_labeled(stmtlabel).prettyprint()
+            ## input()
+                    
+            self.units.append( list(new_unit))
         
         # in the json object, use short names
         somenode = first(self.mygraph.node.values())
         return list(map(lambda unit: [ somenode.shortlabel(e) for e in unit ], self.units))
         
-                    
+
+    # for entities and events: if they have a single type and/or a single KB entry,
+    # record all statements that state this type/ KB entry
+    def _types_and_kbentries(self):
+        # mapping from entity or event name to typing or KB entry statement name
+        ee_statements = { }
+        # set of statements that should not get their own unit
+        nonunit_statements = set()
+
+        for node in self.mygraph.nodes():
+            # only consider entity and event nodes
+            if "Entity" in node.get("type", shorten = True) or "Event" in node.get("type", shorten = True):
+
+                # type info
+                typeobjs = list(self.mygraph.types_of(node.name))
+                typelabels = set( o.typelabels.pop() for o in typeobjs)
+                # single type label?
+                if len(typelabels) == 1:
+                    # record typing statements in ee_statements
+                    if node.name not in ee_statements: ee_statements[node.name] = set()
+                    ee_statements[node.name].update(o.typenode.name for o in typeobjs)
+                    # .. and in nonunit_statements
+                    nonunit_statements.update(o.typenode.name for o in typeobjs)
+
+                # kb entry info
+                kbobjs = list(self.mygraph.kbentries_of(node.name))
+                kbentries = set( o.kbentry.pop() for o in kbobjs)
+                if len(kbentries) == 1:
+                    # record typing statements in ee_statements
+                    if node.name not in ee_statements: ee_statements[node.name] = set()
+                    ee_statements[node.name].update(o.kbentrynode.name for o in kbobjs)
+                    # .. and in nonunit_statements
+                    nonunit_statements.update(o.kbentrynode.name for o in kbobjs)
+                
+        return (ee_statements, nonunit_statements)
+                
        
     # compute the distances between units.
     # return as a list of lists,

@@ -89,10 +89,8 @@ class AidaWhoisInfo:
     def prettyprint(self, indent = 0, omit = [ ]):
         # node type and predicate
         if self.node is not None:
-            if len(self.node.source) > 0:
-                print("\t" * indent, "Node", self.node.shortname(), "from", ", ".join(self.node.source))
-            else:
-                print("\t" * indent, "Node", self.node.shortname())
+            print("\t" * indent, "Node", self.node.shortname())
+            
             if "Statement" in self.node.get("type", shorten=True):
                 print("\t" * indent, "pred:", ",".join(self.node.get("predicate", shorten=True)))
             else:
@@ -235,7 +233,9 @@ class AidaGraph(RDFGraph):
         # we do have an entry for this node.
         # determine its types
         for type_obj in self.types_of(nodelabel):
-            whois_obj.add_type(type_obj, self.confidence_of(type_obj.typenode))
+            conflevel = self.confidence_of(type_obj.typenode.name)
+            if conflevel is not None:
+                whois_obj.add_type(type_obj, conflevel)
 
         # determine KB entries
         for kb_obj in self.kbentries_of(nodelabel):
