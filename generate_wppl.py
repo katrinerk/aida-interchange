@@ -13,12 +13,26 @@ from first import first
 import pickle
 from AidaGraph import AidaGraph, AidaNode
 import AnnoExplore
-import WebpplInterface
+import MyScratchInterface
 
 indir = sys.argv[1]
 
+
+entrypoints = [{
+    "ere" : ["E779987.00064", "V779987.00022"],
+    # MH-17 is-a Vehicle, kbEntry MH-17, the event is an attack, target-of Conflict-Attack, target-of Conflict-Attack
+    "statements" : [ "assertion-915",  "relation-718", "assertion-918", "ub6bL329C1", "ub6bL272C1" ],
+    "corefacetLabels" : ["?crash_target", "?crash_event"],
+    "corefacetFillers" : ["E779987.00064","V779987.00022"],
+    "coreconstraints" : [
+        ["?crash_event", "Conflict_attack_attacker", "?crash_attacker"],
+        ["?crash_event", "Conflict_attack_instrument", "?crash_instrument"],
+        ["?crash_event", "Conflict_attack_place", "?crash_place"]
+    ],
+}]
+    
 mygraph = AnnoExplore.read_ldc_gaia_annotation(indir)
-wppl_obj = WebpplInterface.WpplInterface(mygraph)
+wppl_obj = MyScratchInterface.WpplInterface(mygraph, entrypoints)
 
 outf = open("aidagraph.json", "w")
 wppl_obj.write(outf)

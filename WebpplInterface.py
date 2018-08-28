@@ -18,41 +18,49 @@ import AnnoExplore
 ###########
 # Given an AidaGraph, transform it into input for WebPPL analysis:
 # * re-encode the graph,
-# * compute units for clustering,
-# * compute pairwise distances between units
+# * compute pairwise distances between statements
 class WpplInterface:
-    def __init__(self, mygraph):
+    def __init__(self, mygraph, entrypoints):
         self.mygraph = mygraph
         
         self.json_obj = { }
 
         # re-encode the graph
+        self.statements = [ ]
+        self.stmt_id = { }
+        
         self.json_obj["theGraph"] = self._transform_graph()
-        # compute units
-        self.units = [ ]
-        self.json_obj["units"] = self._compute_units()
-        # and pairwise unit distances. we consider maximal distances of 5.
+        # get a list of statements
+        self.json_obj["statements"] = self.statements
+        # and pairwise statement distances. we consider maximal distances of 5.
         self.dist = { }
         self.maxdist = 5
+        self.unreachabledist = 10 * self.maxdist
         
-        self.json_obj["unitDistances"] = self._compute_distances()
+        self.json_obj["statementProximity"] = self._compute_proximity()
 
+        self.json_obj["entrypoints"] = self._characterize_entrypoints(entrypoints)
+        
     def write(self, io):
         json.dump(self.json_obj, io, indent = 1)
 
-    ###########3
+    ###################################
     # functions that are actually doing the work
-    
+
     def _transform_graph(self):
         retv = { }
+        self.statements = [ ]
+        self.stmt_id = { }
         
-        # we write out statements, events, entities
+        # we write out statements, events, entities, relations
         for node in self.mygraph.nodes():
-            # entities, events: they only have a type
+            # entities, events: they  have a type. They also have a list of adjacent statement indices to be added later
             if "Entity" in node.get("type", shorten = True):
                 retv[ node.shortname() ] = { "type" : "Entity" }
             elif "Event" in node.get("type", shorten = True):
                 retv[ node.shortname() ] = { "type" : "Event" }
+            elif "Relation" in node.get("type", shorten = True):
+                retv[ node.shortname() ] = { "type" : "Relation" }
             # statements have a single subj, pred, obj, a maximal confidence level, and possibly mentions
             elif "Statement" in node.get("type", shorten = True):
                 # type
@@ -69,114 +77,63 @@ class WpplInterface:
                 if len(conflevels) > 0:
                     retv[ node.shortname()]["conf"] = max(conflevels)
 
+                # and remember that we have seen this statement
+                self.statements.append(node.shortname())
+                self.stmt_id[ node.shortname()] = len(self.statements) - 1
+
+        # now add indices of related statements
+        # go through all ERE nodes
+        for node in self.mygraph.nodes():
+            if len(node.get("type", shorten=True).intersection({"Event", "Relation", "Entity"})) > 0:
+                retv[ node.shortname()]["adjacent"] = self._adjacent_statements(node)
+
+        #print(self.stmt_id)
+        #input("hit enter")
         return retv
 
-    # compute the units for clustering, return as a list of sets of node names
-    # units are groups of statements that share the same mention.
-    # for entities and events that only have a single type of KB entry,
-    # the type and KB entry statements go into all units that mention the entity/event
-    # and do not go into a separate unit.
-    def _compute_units(self):
-        
-        ee_statements, nonunit_statements = self._types_and_kbentries()
-        
-        mention_stmt = { }
-        
-        for node in self.mygraph.nodes("Statement"):
-            # skip this statement?
-            if node.name in nonunit_statements:
-                continue
-            
-            # Whenever there is more than one mention associated with a statement,
-            # these are two different mentions justifying a statement.
-            # so just list the statement as belonging to both.
-            for mention in self.mygraph.mentions_associated_with(node.name):
-                if mention not in mention_stmt:
-                    mention_stmt[mention] = [ ]
-                if node.name not in mention_stmt[mention]:
-                    mention_stmt[mention].append(node.name)
+    # for an entity, relation, or event, determine all statements that mention it
+    def _adjacent_statements(self, node):
+        retv = [ ]
 
-        # in units, retain full names of unit members
-        # add in typing and kb entry statements as appropriate
-        self.units = [ ]
-        for unit in mention_stmt.values():
-            ## print("Statements")
-            ## for stmtlabel in unit: self.mygraph.node_labeled(stmtlabel).prettyprint()
-            # determine entities and events mentioned in the unit
-            ee = set()
-            for stmtlabel in unit:
-                n = self.mygraph.node_labeled(stmtlabel)
-                for label in n.get("subject"):
-                    if label in self.mygraph.node: ee.add(label)
-                for label in n.get("object"):
-                    if label in self.mygraph.node: ee.add(label)
+        # check all the neighbor nodes for whether they are statements
+        for rel, neighbornodelabels in node.inedge.items():
+            for neighbornodelabel in neighbornodelabels:
 
-            new_unit = set(unit)
-            for e in ee:
-                if e in ee_statements:
-                    new_unit.update(ee_statements[e])
+                neighbornode = self._getnode(neighbornodelabel)
+                if neighbornode is not None:
+                    if "Statement" in neighbornode.get("type", shorten = True):
+                        retv.append(self.stmt_id[neighbornode.shortname()])
+                        
+        return retv
+    
 
-            ## print("\n\nadding")
-            ## for stmtlabel in new_unit: self.mygraph.node_labeled(stmtlabel).prettyprint()
-            ## input()
-                    
-            self.units.append( list(new_unit))
-        
-        # in the json object, use short names
-        somenode = first(self.mygraph.node.values())
-        return list(map(lambda unit: [ somenode.shortlabel(e) for e in unit ], self.units))
-        
-
-    # for entities and events: if they have a single type and/or a single KB entry,
-    # record all statements that state this type/ KB entry
-    def _types_and_kbentries(self):
-        # mapping from entity or event name to typing or KB entry statement name
-        ee_statements = { }
-        # set of statements that should not get their own unit
-        nonunit_statements = set()
-
-        for node in self.mygraph.nodes():
-            # only consider entity and event nodes
-            if "Entity" in node.get("type", shorten = True) or "Event" in node.get("type", shorten = True):
-
-                # type info
-                typeobjs = list(self.mygraph.types_of(node.name))
-                typelabels = set( o.typelabels.pop() for o in typeobjs)
-                # single type label?
-                if len(typelabels) == 1:
-                    # record typing statements in ee_statements
-                    if node.name not in ee_statements: ee_statements[node.name] = set()
-                    ee_statements[node.name].update(o.typenode.name for o in typeobjs)
-                    # .. and in nonunit_statements
-                    nonunit_statements.update(o.typenode.name for o in typeobjs)
-
-                # kb entry info
-                kbobjs = list(self.mygraph.kbentries_of(node.name))
-                kbentries = set( o.kbentry.pop() for o in kbobjs)
-                if len(kbentries) == 1:
-                    # record typing statements in ee_statements
-                    if node.name not in ee_statements: ee_statements[node.name] = set()
-                    ee_statements[node.name].update(o.kbentrynode.name for o in kbobjs)
-                    # .. and in nonunit_statements
-                    nonunit_statements.update(o.kbentrynode.name for o in kbobjs)
-                
-        return (ee_statements, nonunit_statements)
-                
-       
-    # compute the distances between units.
+    # compute the proximity between statements.
     # return as a list of lists,
-    # where the first list contains the distances of unit 0 to all other units,
-    # the second list contains the distances of unit 1 to all units of index 2 or higher.
-    # and so on.
-    def _compute_distances(self):
+    # where list i contains the proximity of statement i to all other statements, normalized to sum to 1.
+    # 
+    def _compute_proximity(self):
         # get pairwise node distances
         self._compute_node_distances()
 
         # compute unit distances
         retv = [ ]
         
-        for i in range(len(self.json_obj["units"]) - 1):
-            retv.append( [ self._unit_distance(i, j) for j in range(i+1, len(self.units)) ] )
+        for i in range(len(self.json_obj["statements"])):
+            distances = [ self.getdist(self.statements[i], self.statements[j]) for j in range(len(self.json_obj["statements"]))]
+            # mark node unreachable from itself
+            distances[i] = self.unreachabledist
+            
+            # sum of proximities for reachable nodes
+            sumprox = sum(self.maxdist - distances[j] for j in range(len(distances)) if distances[j] < self.unreachabledist)
+
+            # proximity normalized by summed proximities
+            if sumprox > 0:
+                # this node is actually reachable from somewhere
+                retv.append([(self.maxdist - distances[j])/sumprox if distances[j] < self.unreachabledist else 0.0 \
+                                for j in range(len(distances))])
+            else:
+                # this node is unconnected to everything. It has normalized proximities of zero to everything.
+                retv.append([0.0] * len(distances))
 
         return retv
  
@@ -193,29 +150,33 @@ class WpplInterface:
         # we only do statement nodes.
         labels = [ k for k, n in self.mygraph.node.items() if "Statement" in n.get("type", shorten = True)]
         # we step through neighbors that are event or entities too
-        visitlabels = set([ k for k, n in self.mygraph.node.items() if len(n.get("type", shorten=True).intersection({"Statement", "Event", "Entity"})) > 0])
+        visitlabels = set([ k for k, n in self.mygraph.node.items() if len(n.get("type", shorten=True).intersection({"Statement", "Event", "Relation", "Entity"})) > 0])
 
         # do maxdist steps outwards from each statement node
         for subj in labels:
+            subjnode = self._getnode(subj)
+            if subjnode is None: continue
+                
             # next round of nodes to visit: neighbors of subj
-            fringe = self._valid_neighbors(subj, visitlabels)
+            fringe = self._valid_neighbors(subjnode, visitlabels)
 
             dist = 1
             while dist < self.maxdist:
                 newfringe = set()
                 for obj in fringe:
                     if obj == subj: continue
-                    self.dist[ self._nodepair(subj, obj)] = min( self.getdist(subj, obj), dist)
-                    newfringe.update(self._valid_neighbors(obj, visitlabels))
+                    objnode = self._getnode(obj)
+                    if objnode is None: continue
+                        
+                    self.dist[ self._nodepair(subjnode.shortname(), objnode.shortname())] = \
+                      min( self.getdist(subjnode.shortname(), objnode.shortname()), dist)
+                    newfringe.update(self._valid_neighbors(objnode, visitlabels))
                 fringe = newfringe
                 dist += 1
+
                 
 
-    # distance between two units: minimum node distance between them
-    def _unit_distance(self, i1, i2):
-        return min(self.getdist( label1, label2) for label1 in self.units[i1] for label2 in self.units[i2])
-        
-    # helper functions for node_distances
+    # helper functions for node_distances. called by get_node_distances and _unit_distance
     def getdist(self, l1, l2):
         if l1 == l2:
             return 0
@@ -223,14 +184,59 @@ class WpplInterface:
             return self.dist[ (l1, l2) ]
         elif l2 < l1 and (l2, l1) in self.dist:
             return self.dist[ (l2, l1) ]
-        else: return 10 * self.maxdist
+        else: return self.unreachabledist
 
+    # sorted pair of label 1, label 2
     def _nodepair(self, l1, l2):
         return tuple(sorted([l1, l2]))
 
-    def _valid_neighbors(self, nodelabel, visitlabels):
+    # return all node labels that have an incoming or outgoing edge to/from the node with label nodelabel
+    def _valid_neighbors(self, node, visitlabels):
         retv = set()
-        for nset in self.mygraph.node[nodelabel].outedge.values(): retv.update(nset)
-        for nset in self.mygraph.node[nodelabel].inedge.values(): retv.update(nset)
+        for nset in node.outedge.values(): retv.update(nset)
+        for nset in node.inedge.values(): retv.update(nset)
         return retv.intersection(visitlabels)
 
+
+    # prepare entry point descriptions to be in the right format for wppl.
+    # an entry point is a dictionary with the following entries:
+    # - ere: a list of labels of entities, relations, and events
+    # - statements: a list of labels of statements
+    # - corefacetLabels, corefacetFillers: two lists that together map labels of core facets to their fillers in ERE
+    # (don't ask; it's because there is no way to create updated dictionaries in webppl where the key is stored in a variable)
+    # - coreconstraints: a list of triples [ corefacetID, AIDAedgelabel, corefacetID] where
+    #   statements corresponding to these triples need to be added to the cluster
+    # - candidates: a list of statement labels such that these are exactly the statements that have one of the
+    #   "ere" entries as one of their arguments. these are candidates for addition to the cluster.
+    #
+    # at this point we assume that the entry point has been completely filled in except for the "candidates".
+    # This function modifies the entry points in place, adding candidates
+    # and replacing each statement in "statements" by its ID
+    def _characterize_entrypoints(self, entrypoints):
+        for entrypoint in entrypoints:
+
+            # replace statements by their IDs
+            entrypoint["statements"] = [ self.stmt_id[ s] for s in entrypoint["statements"]]
+            
+            # fill in candidates            
+            candidateset = set()
+
+            # for each ERE in the entry point:
+            # its adjacent statements go in the set of candidates
+            for nodelabel in entrypoint["ere"]:
+                if nodelabel in self.json_obj["theGraph"] and \
+                  self.json_obj["theGraph"][nodelabel]["type"] in ["Entity", "Event", "Relation"]:
+                    candidateset.update(self.json_obj["theGraph"][nodelabel]["adjacent"])
+
+            # statements that are already part of the entry point don't go into candidates
+            candidateset.difference_update(entrypoint["statements"])
+            
+            entrypoint["candidates"] = list(candidateset)
+            
+        return entrypoints
+
+    def _getnode(self, nodelabel):
+        if nodelabel in self.mygraph.node:
+            return self.mygraph.node[nodelabel]
+        else: return None
+         
