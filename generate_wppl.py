@@ -13,9 +13,9 @@ from first import first
 import pickle
 from AidaGraph import AidaGraph, AidaNode
 import AnnoExplore
-import MyScratchInterface
+import WebpplInterface
 
-indir = sys.argv[1]
+kb_filename = sys.argv[1]
 
 
 entrypoints = [{
@@ -30,9 +30,14 @@ entrypoints = [{
         ["?crash_event", "Conflict_attack_place", "?crash_place"]
     ],
 }]
-    
-mygraph = AnnoExplore.read_ldc_gaia_annotation(indir)
-wppl_obj = MyScratchInterface.WpplInterface(mygraph, entrypoints)
+
+g = rdflib.Graph()
+result = g.parse(kb_filename, format="ttl")
+
+mygraph = AidaGraph()
+mygraph.add_graph(g)
+
+wppl_obj = WebpplInterface.WpplInterface(mygraph, entrypoints)
 
 outf = open("aidagraph.json", "w")
 wppl_obj.write(outf)
