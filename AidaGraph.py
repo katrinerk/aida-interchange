@@ -1,17 +1,16 @@
-###
-# builds on RDFGraph, has higher-level access
+"""builds on RDFGraph, has higher-level access"""
 
 import queue
-import sys
 import json
 
 from RDFGraph import RDFGraph, RDFNode
 
-import pprint
 
-################################
-# a node: a ttl node, extended by domain-specific stuff
+omit_labels = ("system", "confidence", "privateData", "justifiedBy")
+
+
 class AidaNode(RDFNode):
+    """a node: a ttl node, extended by domain-specific stuff"""
     def __init__(self, nodename):
         RDFNode.__init__(self, nodename)
         self.description = None
@@ -19,12 +18,60 @@ class AidaNode(RDFNode):
     def add_description(self, description):
         self.description = description
 
-    def prettyprint(self, omit = ["system", "confidence", "privateData", "justifiedBy"]):
-        RDFNode.prettyprint(self, omit = omit)
+    def prettyprint(self, omit=omit_labels):
+        super().prettyprint(omit=omit)
         if self.description is not None:
             print("\t", "descr :", self.description)
 
-    
+    def has_type(self, targettype, shorten=True):
+        """if the node has type of targettype"""
+        return targettype in self.get("type", shorten=shorten)
+
+    def is_entity(self):
+        """if the node is an Entity"""
+        return self.has_type("Entity", shorten=True)
+
+    def is_relation(self):
+        """if the node is a Relation"""
+        return self.has_type("Relation", shorten=True)
+
+    def is_event(self):
+        """if the node is an Event"""
+        return self.has_type("Event", shorten=True)
+
+    def is_ere(self):
+        """if the node is an Entity / Relation / Event"""
+        return self.is_entity() or self.is_relation() or self.is_event()
+
+    def is_statement(self):
+        """if the node is a Statement"""
+        return self.has_type("Statement", shorten=True)
+
+    def has_predicate(self, pred, shorten=False):
+        """if the node has a predicate relation to a node with label pred"""
+        return pred in self.get("predicate", shorten=shorten)
+
+    def has_subject(self, subj, shorten=False):
+        """if the node has a subject relation to a node with label subj"""
+        return subj in self.get("subject", shorten=shorten)
+
+    def has_object(self, obj, shorten=False):
+        """if the node has an object relation to a node with label obj"""
+        return obj in self.get("object", shorten=shorten)
+
+    def is_type_statement(self, nodelabel=None):
+        """if the node is a Statement specifying the type of nodelabel"""
+        if self.is_statement() and self.has_predicate("type", shorten=True):
+            if nodelabel is None or self.has_subject(nodelabel, shorten=False):
+                return True
+        return False
+
+    def is_kbentry_statement(self, nodelabel=None):
+        """if the node is a Statement specifying the type of nodelabel"""
+        if self.is_statement() and self.has_predicate("hasKBEntry", shorten=True):
+            if nodelabel is None or self.has_subject(nodelabel, shorten=False):
+                return True
+        return False
 
 
 ################################
@@ -36,270 +83,357 @@ class AidaTypeInfo:
     def __init__(self, typenode):
         # type label
         self.typenode = typenode
-        self.typelabels = self.typenode.get("object", shorten = True)
+        self.typelabels = self.typenode.get("object", shorten=True)
 
 
 # a KB entry
 class AidaKBEntryInfo:
     def __init__(self, kbentrynode):
         self.kbentrynode = kbentrynode
-        self.kbentry = self.kbentrynode.get("object", shorten= True)
-        
+        self.kbentry = self.kbentrynode.get("object", shorten=True)
+
+
 # a node's neighbor, with the edge label between them and the direction of the edge
 class AidaNeighborInfo:
     def __init__(self, thisnodelabel, neighbornodelabel, role, direction):
         self.thisnodelabel = thisnodelabel
-        self.neighbornodelabel= neighbornodelabel
+        self.neighbornodelabel = neighbornodelabel
         self.role = role
-        if direction not in ["<", ">"]: raise Error
+        assert direction in ["<", ">"]
         self.direction = direction
 
     def inverse_direction(self):
-        if self.direction == "<": return ">"
-        else: return "<"
+        if self.direction == "<":
+            return ">"
+        else:
+            return "<"
+
+    def __str__(self):
+        return self.direction + RDFNode.shortlabel(self.role) + \
+               self.direction + " " + RDFNode.shortlabel(self.neighbornodelabel)
+
 
 # characterization of an entity or event in terms of its types,
 # arguments, and events
 class AidaWhoisInfo:
-    def __init__(self):
-        self.node = None
-        self.type_info = { }
-        self.kb_info = set()
-        self.inedge_info = [ ]
-        self.outedge_info = [ ]
-
-    def add_node(self, node):
+    def __init__(self, node):
         self.node = node
+        self.type_conf_info = {}
+        self.kbentry_info = set()
+        self.inedge_info = []
+        self.outedge_info = []
 
     # for each type of this ere, keep only the maximum observed confidence level,
     # but do be prepared to keep multiple types
-    def add_type(self, typeobj, conflevels):
-        for typelabel in typeobj.typelabels:
-            self.type_info[typelabel] = max(max(conflevels), self.type_info.get(typelabel, 0))
+    def add_type(self, type_info, conflevels):
+        for typelabel in type_info.typelabels:
+            self.type_conf_info[typelabel] = max(
+                max(conflevels), self.type_conf_info.get(typelabel, 0))
 
-    def add_kbentry(self, kbobj):
-        self.kb_info = self.kb_info.union(kbobj.kbentry)
+    def add_kbentry(self, kbentry_info):
+        self.kbentry_info = self.kbentry_info.union(kbentry_info.kbentry)
 
-    def add_inedge(self, pred, node, whois_obj):
-        self.inedge_info.append( (pred, node, whois_obj))
+    def add_inedge(self, pred, node, whois_info):
+        self.inedge_info.append((pred, node, whois_info))
 
-    def add_outedge(self, pred, node, whois_obj):
-        self.outedge_info.append( (pred, node, whois_obj))
+    def add_outedge(self, pred, node, whois_info):
+        self.outedge_info.append((pred, node, whois_info))
 
-    def prettyprint(self, indent = 0, omit = [ ]):
+    def prettyprint(self, indent=0, omit=[]):
         # node type and predicate
         if self.node is not None:
             print("\t" * indent, "Node", self.node.shortname())
-            
-            if "Statement" in self.node.get("type", shorten=True):
-                print("\t" * indent, "pred:", ",".join(self.node.get("predicate", shorten=True)))
+
+            if self.node.is_statement():
+                print("\t" * indent, "pred:",
+                      ",".join(self.node.get("predicate", shorten=True)))
             else:
-                print("\t" * indent, "isa:", ",".join(self.node.get("type", shorten=True)))
+                print("\t" * indent, "isa:",
+                      ",".join(self.node.get("type", shorten=True)))
             if self.node.description is not None:
                 print("\t" * indent, "Descr :", self.node.description)
-                
+
         # type info
-        if len(self.type_info) > 0:
-            print("\t"*indent, "types:", ", ".join(t + "(conf=" + str(c) + ")" for t, c in self.type_info.items()))
+        if len(self.type_conf_info) > 0:
+            print("\t"*indent, "types:",
+                  ", ".join(t + "(conf=" + str(c) + ")" for t, c
+                            in self.type_conf_info.items()))
+
         # KB entries
-        if len(self.kb_info) > 0:
-            print("\t"*indent, "KB entries:", ", ".join(self.kb_info))
+        if len(self.kbentry_info) > 0:
+            print("\t"*indent, "KB entries:", ", ".join(self.kbentry_info))
+
         # incoming edges
         if len(self.inedge_info) > 0:
-            for pred, node, whois_obj in self.inedge_info:
+            for pred, node, whois_info in self.inedge_info:
                 if node.name not in omit:
-                    print("\t"*indent, "<" + node.shortlabel(pred) + "<", node.shortname())
-                    whois_obj.prettyprint(indent = indent + 1, omit = omit + [self.node.name])
+                    print("\t"*indent,
+                          "<" + RDFNode.shortlabel(pred) + "<",
+                          node.shortname())
+                    whois_info.prettyprint(indent=indent + 1, omit=omit + [self.node.name])
+
         # outgoing edges
         if len(self.outedge_info) > 0:
             for pred, node, whois_obj in self.outedge_info:
                 if node.name not in omit:
-                    print("\t"*indent, ">" + node.shortlabel(pred) + ">", node.shortname())
-                    whois_obj.prettyprint(indent = indent + 1, omit= omit + [self.node.name])
-        
-        
-        
-#################################3
+                    print("\t"*indent,
+                          ">" + RDFNode.shortlabel(pred) + ">",
+                          node.shortname())
+                    whois_obj.prettyprint(indent=indent + 1, omit=omit + [self.node.name])
+
+
 class AidaGraph(RDFGraph):
 
-    def __init__(self, nodeclass = AidaNode):
-        RDFGraph.__init__(self, nodeclass = nodeclass)
-    
+    def __init__(self, nodeclass=AidaNode):
+        RDFGraph.__init__(self, nodeclass=nodeclass)
+
+    # judge whether a node label exists in the graph
+    def has_node(self, nodelabel):
+        return nodelabel in self.node_dict
+
     # access method for a single node by its label
-    def node_labeled(self, nodelabel):
-        return self.node.get(nodelabel, None)
-    
+    def get_node(self, nodelabel):
+        return self.node_dict.get(nodelabel, None)
+
     # iterator over the nodes.
     # optionally with a restriction on the type of the nodes returned
-    def nodes(self, targettype = None):
-        for node in self.node.values():
-            if targettype is None or targettype in node.get("type")  or targettype in node.get("type", shorten = True):
+    def nodes(self, targettype=None):
+        for node in self.node_dict.values():
+            if targettype is None or node.has_type(targettype):
                 yield node
 
+    # given a node label, and a pred, return the list of object that go with it,
+    # can be viewed as a composition of AidaGraph.node_labeled and RDFNode.get
+    def get_node_objs(self, nodelabel, targetpred, shorten=False):
+        node = self.get_node(nodelabel)
+        if node:
+            return node.get(targetpred=targetpred, shorten=shorten)
+        else:
+            return []
+
     # confidence level associated with a node. node given by its name
-    def confidence_of(self, nodename):
-        if nodename not in self.node:
+    def confidence_of(self, nodelabel):
+        if not self.has_node(nodelabel):
             return None
-        confnodelabels = self.node[nodename].get("confidence")
-        
         confidenceValues = set()
-        for clabel in confnodelabels:
-            if clabel in self.node:
-                confidenceValues.update( float(c) for c in self.node[clabel].get("confidenceValue"))
+
+        for clabel in self.get_node_objs(nodelabel, "confidence"):
+            for c in self.get_node_objs(clabel, "confidenceValue"):
+                confidenceValues.add(float(c))
 
         return confidenceValues
 
     # iterator over types for a particular entity/event/relation
-    # yields AidaTypeInfo objects that
-    # give access ot the whole typing node
-    def types_of(self, obj):
-        if obj in self.node:
-            for pred, subjs in self.node[obj].inedge.items():
+    # yields AidaTypeInfo objects that give access ot the whole typing node
+    def types_of(self, nodelabel):
+        if self.has_node(nodelabel):
+            for pred, subjs in self.get_node(nodelabel).inedge.items():
                 for subj in subjs:
-                    if subj in self.node:
-                        subjnode = self.node[subj]
-                        if "type" in subjnode.get("predicate", shorten = True) and obj in subjnode.get("subject"):
-                            yield AidaTypeInfo(subjnode)
+                    subjnode = self.get_node(subj)
+                    if subjnode and subjnode.is_type_statement(nodelabel):
+                        yield AidaTypeInfo(subjnode)
 
-    # knowledge base entries of a node
-    def kbentries_of(self, obj):
-        if obj in self.node:
-            for pred, subjs in self.node[obj].inedge.items():
+    # iterator over knowledge base entries of a node
+    def kbentries_of(self, nodelabel):
+        if self.has_node(nodelabel):
+            for pred, subjs in self.get_node(nodelabel).inedge.items():
                 for subj in subjs:
-                    if subj in self.node:
-                        subjnode = self.node[subj]
-                        if "hasKBEntry" in subjnode.get("predicate", shorten = True) and obj in subjnode.get("subject"):
-                            yield AidaKBEntryInfo(subjnode)
+                    subjnode = self.get_node(subj)
+                    if subjnode and subjnode.is_kbentry_statement(nodelabel):
+                        yield AidaKBEntryInfo(subjnode)
 
-    # mentions associated with this particular node
-    def mentions_associated_with(self, subj):
-        if subj in self.node:
-            justifications = self.node[subj].get("justifiedBy")
-            for jlabel in justifications:
-                if jlabel in self.node:
-                    privatelabels = self.node[jlabel].get("privateData")
-                    for plabel in privatelabels:
-                        if plabel in self.node:
-                            mentionstrings = self.node[plabel].get("jsonContent")
-                            for mentionstring in mentionstrings:
-                                jobj = json.loads(mentionstring)
-                                if "mention" in jobj:
-                                    yield jobj["mention"]
+    # iterator over mentions associated with the statement node
+    def mentions_associated_with(self, nodelabel):
+        if not self.has_node(nodelabel) or \
+                not self.get_node(nodelabel).is_statement():
+            return
 
-    # source for a node
-    def sources_associated_with(self, subj):
-        if subj in self.node:
-            private_data = self.node[subj].get("privateData")
-            for plabel in private_data:
-                if plabel in self.node:
-                    strings = self.node[plabel].get("jsonContent")
-                    for s in strings:
-                        jobj = json.loads(s)
-                        if "provenance" in jobj:
-                            for p in jobj["provenance"]:
-                                yield p
-                        
-                            
-            
-                
-    ## # iterator over neighbors of a node
+        for jlabel in self.get_node_objs(nodelabel, "justifiedBy"):
+            for plabel in self.get_node_objs(jlabel, "privateData"):
+                for jsonstring in self.get_node_objs(plabel, "jsonContent"):
+                    jobj = json.loads(jsonstring)
+                    if "mention" in jobj:
+                        yield jobj["mention"]
+
+    # iterator over provenances associate with the statement node
+    def provenances_associated_with(self, nodelabel):
+        if not self.has_node(nodelabel) or \
+                not self.get_node(nodelabel).is_statement():
+            return
+
+        for plabel in self.get_node_objs(nodelabel, "privateData"):
+            for jsonstring in self.get_node_objs(plabel, "jsonContent"):
+                jobj = json.loads(jsonstring)
+                if "provenance" in jobj:
+                    for p in jobj["provenance"]:
+                        yield p
+
+    # iterator over hypotheses supported by the statement node
+    def hypotheses_supported(self, nodelabel):
+        if not self.has_node(nodelabel) or \
+                not self.get_node(nodelabel).is_statement():
+            return
+
+        for plabel in self.get_node_objs(nodelabel, "privateData"):
+            for jsonstring in self.get_node_objs(plabel, "jsonContent"):
+                jobj = json.loads(jsonstring)
+                if "hypothesis" in jobj:
+                    for h in jobj["hypothesis"]:
+                        yield h
+
+    # iterator over hypotheses partially supported by the statement node
+    def hypotheses_partially_supported(self, nodelabel):
+        if not self.has_node(nodelabel) or \
+                not self.get_node(nodelabel).is_statement():
+            return
+
+        for plabel in self.get_node_objs(nodelabel, "privateData"):
+            for jsonstring in self.get_node_objs(plabel, "jsonContent"):
+                jobj = json.loads(jsonstring)
+                if "partial" in jobj:
+                    for h in jobj["partial"]:
+                        yield h
+
+    # iterator over hypotheses contradicted by the statement node
+    def hypotheses_contradicted(self, nodelabel):
+        if not self.has_node(nodelabel) or \
+                not self.get_node(nodelabel).is_statement():
+            return
+
+        for plabel in self.get_node_objs(nodelabel, "privateData"):
+            for jsonstring in self.get_node_objs(plabel, "jsonContent"):
+                jobj = json.loads(jsonstring)
+                if "contradicts" in jobj:
+                    for h in jobj["contradicts"]:
+                        yield h
+
+    # iterator over conflicting hypotheses between two statements
+    def conflicting_hypotheses(self, nodelabel_1, nodelabel_2):
+        if not self.has_node(nodelabel_1) or \
+                not self.get_node(nodelabel_1).is_statement():
+            return
+
+        if not self.has_node(nodelabel_2) or \
+                not self.get_node(nodelabel_2).is_statement():
+            return
+
+        # hypotheses fully / partially supported by nodelabel_1
+        supporting_hyp_1 = set(self.hypotheses_supported(nodelabel_1))
+        supporting_hyp_1.update(
+            set(self.hypotheses_partially_supported(nodelabel_1)))
+        # hypotheses contradicted by nodelabel_1
+        contradicting_hyp_1 = set(self.hypotheses_contradicted(nodelabel_1))
+
+        # hypotheses fully / partially supported by nodelabel_2
+        supporting_hyp_2 = set(self.hypotheses_supported(nodelabel_2))
+        supporting_hyp_2.update(
+            set(self.hypotheses_partially_supported(nodelabel_2)))
+        # hypotheses contradicted by nodelabel_2
+        contradicting_hyp_2 = set(self.hypotheses_contradicted(nodelabel_2))
+
+        for h in supporting_hyp_1.intersection(contradicting_hyp_2):
+            yield h
+        for h in supporting_hyp_2.intersection(contradicting_hyp_1):
+            yield h
+
+    # iterator over neighbors of a node
     # that mention the label of the entity, or whose label is mentioned
     # in the entry of the entity
     # yields AidaNeighborInfo objects
-    def neighbors_of(self, subj):
-        if subj not in self.node:
+    def neighbors_of(self, nodelabel):
+        if not self.has_node(nodelabel):
             return
-        
-        for pred, objs in self.node[subj].outedge.items():
-            for obj in objs:
-                yield AidaNeighborInfo(subj, obj, pred, ">")
-        for pred, othersubjs in self.node[subj].inedge.items():
-            for othersubj in othersubjs:
-                yield AidaNeighborInfo(subj, othersubj, pred, "<")
 
+        for pred, objs in self.get_node(nodelabel).outedge.items():
+            for obj in objs:
+                yield AidaNeighborInfo(nodelabel, obj, pred, ">")
+        for pred, subjs in self.get_node(nodelabel).inedge.items():
+            for subj in subjs:
+                yield AidaNeighborInfo(nodelabel, subj, pred, "<")
 
     # output a characterization of a node:
     # what is its type,
     # what events is it involved in (for an entity),
     # what arguments does it have (for an event)
-    def whois(self, nodelabel, follow = 2):
-        if nodelabel not in self.node:
+    def whois(self, nodelabel, follow=2):
+        if not self.has_node(nodelabel):
             return None
-        
-        whois_obj = AidaWhoisInfo()
 
-        node = self.node[nodelabel]
-        whois_obj.add_node(node)
+        node = self.get_node(nodelabel)
+        
+        whois_info = AidaWhoisInfo(node)
+
         # we do have an entry for this node.
         # determine its types
-        for type_obj in self.types_of(nodelabel):
-            conflevel = self.confidence_of(type_obj.typenode.name)
+        for type_info in self.types_of(nodelabel):
+            conflevel = self.confidence_of(type_info.typenode.name)
             if conflevel is not None:
-                whois_obj.add_type(type_obj, conflevel)
+                whois_info.add_type(type_info, conflevel)
 
         # determine KB entries
-        for kb_obj in self.kbentries_of(nodelabel):
-            whois_obj.add_kbentry(kb_obj)
+        for kbentry_info in self.kbentries_of(nodelabel):
+            whois_info.add_kbentry(kbentry_info)
 
         if follow > 0:
             # we were asked to also explore this node's neighbors
             # explore incoming edges
-            for pred, subjs in self.node[nodelabel].inedge.items():
+            for pred, subjs in node.inedge.items():
                 for subj in subjs:
-                    if subj in self.node:
-                        subjnode = self.node[subj]
-                        if len(subjnode.get("predicate", shorten = True).intersection(["type", "hasKBEntry"])) > 0:
+                    if self.has_node(subj):
+                        subjnode = self.get_node(subj)
+                        if subjnode.has_predicate("type", shorten=True) or \
+                                subjnode.has_predicate("hasKBEntry"):
                             # don't re-record typing nodes
                             continue
-                        elif "Statement" in subjnode.get("type", shorten=True):
-                            whois_neighbor_obj = self.whois(subj, follow = follow - 1)
-                            whois_obj.add_inedge(pred, subjnode, whois_neighbor_obj)
+                        elif subjnode.is_statement():
+                            whois_neighbor_info = self.whois(subj, follow=follow - 1)
+                            whois_info.add_inedge(pred, subjnode, whois_neighbor_info)
 
             # explore outgoing edges
-            for pred, objs in self.node[nodelabel].outedge.items():
+            for pred, objs in node.outedge.items():
                 for obj in objs:
-                    if obj in self.node:
-                        objnode = self.node[obj]
-                        if len(objnode.get("type", shorten = True).intersection(["Statement", "Entity"])) > 0:
-                            whois_neighbor_obj = self.whois(obj, follow = follow - 1)
-                            whois_obj.add_outedge(pred, objnode, whois_neighbor_obj)
+                    if self.has_node(obj):
+                        objnode = self.get_node(obj)
+                        if objnode.is_statement() or objnode.is_ere():
+                            whois_neighbor_info = self.whois(obj, follow=follow - 1)
+                            whois_info.add_outedge(pred, objnode, whois_neighbor_info)
 
-                    
-
-        return whois_obj
-            
+        return whois_info
 
     # traverse: explore the whole reachable graph starting from
     # startnodelabel,
     # yields pairs (nodelabel, path)
     # where path is a list of AidaNeighborInfo objects, starting from startnodelabel
-    def traverse(self, startnodelabel, omitroles = ["system", "justifiedBy", "confidence", "privateData"]):
+    def traverse(self, startnodelabel, omitroles=omit_labels):
         nodelabels_to_visit = queue.Queue()
         nodelabels_to_visit.put((startnodelabel, []))
         edges_visited = set()
-        if startnodelabel not in self.node:
+        if not self.has_node(startnodelabel):
             return
-        
-        startnode = self.node[startnodelabel]
 
         if omitroles is None:
             omitroles = set()
 
-        while not(nodelabels_to_visit.empty()):
+        while not nodelabels_to_visit.empty():
             current_label, current_path = nodelabels_to_visit.get()
 
             yield (current_label, current_path)
 
-            for neighbor_obj in self.neighbors_of(current_label):
-                if neighbor_obj.role in omitroles or startnode.shortlabel(neighbor_obj.role) in omitroles:
+            for neighbor_info in self.neighbors_of(current_label):
+                if neighbor_info.role in omitroles or \
+                        RDFNode.shortlabel(neighbor_info.role) in omitroles:
                     continue
                 visited = [
-                    (current_label, neighbor_obj.role, neighbor_obj.direction, neighbor_obj.neighbornodelabel),
-                    (neighbor_obj.neighbornodelabel, neighbor_obj.role, neighbor_obj.inverse_direction(), current_label) ]
+                    (current_label, neighbor_info.role,
+                     neighbor_info.direction, neighbor_info.neighbornodelabel),
+                    (neighbor_info.neighbornodelabel, neighbor_info.role,
+                     neighbor_info.inverse_direction(), current_label)
+                ]
 
                 if any(v in edges_visited for v in visited):
                     pass
                 else:
-                    nodelabels_to_visit.put( (neighbor_obj.neighbornodelabel, current_path + [neighbor_obj]) )
-                    for v in visited: edges_visited.add(v)
-
+                    nodelabels_to_visit.put(
+                        (neighbor_info.neighbornodelabel, current_path + [neighbor_info]))
+                    for v in visited:
+                        edges_visited.add(v)
