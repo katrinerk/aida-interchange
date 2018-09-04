@@ -19,11 +19,11 @@ kb_filename = sys.argv[1]
 
 
 entrypoints = [{
-    "ere" : ["E779987.00064", "V779987.00022"],
-    # MH-17 is-a Vehicle, kbEntry MH-17, the event is an attack, target-of Conflict-Attack, target-of Conflict-Attack
-    "statements" : [ "assertion-915",  "relation-718", "assertion-918", "ub6bL329C1", "ub6bL272C1" ],
+    "ere" : ["E780874.00294", "V780874.00065"],
+    # MH-17 is-a Vehicle, kbEntry MH-17, the event is an attack, target-of Conflict-Attack (repeated).
+    "statements" : [ "assertion-3434",  "assertion-3455", "assertion-3459", "assertion-3463", "assertion-3466"],
     "corefacetLabels" : ["?crash_target", "?crash_event"],
-    "corefacetFillers" : ["E779987.00064","V779987.00022"],
+    "corefacetFillers" : ["E780874.00294","V780874.00065"],
     "coreconstraints" : [
         ["?crash_event", "Conflict_attack_attacker", "?crash_attacker"],
         ["?crash_event", "Conflict_attack_instrument", "?crash_instrument"],
