@@ -47,6 +47,15 @@ class AidaNode(RDFNode):
         """if the node is a Statement"""
         return self.has_type("Statement", shorten=True)
 
+    def is_cluster(self):
+        """if the node is a SameAsCluster"""
+        return self.has_type("SameAsCluster", shorten=True)
+
+    def is_cluster_membership(self):
+        """if the node is a ClusterMembership statement"""
+        return self.has_type("ClusterMembership", shorten=True)
+
+
     def has_predicate(self, pred, shorten=False):
         """if the node has a predicate relation to a node with label pred"""
         return pred in self.get("predicate", shorten=shorten)
