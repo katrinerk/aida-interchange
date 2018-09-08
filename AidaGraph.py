@@ -47,7 +47,7 @@ class AidaNode(RDFNode):
         """if the node is a Statement"""
         return self.has_type("Statement", shorten=True)
 
-    def is_cluster(self):
+    def is_sameas_cluster(self):
         """if the node is a SameAsCluster"""
         return self.has_type("SameAsCluster", shorten=True)
 
