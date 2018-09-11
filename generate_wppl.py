@@ -22,15 +22,11 @@ entrypoints = [{
     "ere" : ["E780874.00294", "V780874.00065"],
     # MH-17 is-a Vehicle, kbEntry MH-17, the event is an attack, target-of Conflict-Attack (repeated).
     "statements" : [ "assertion-3434",  "assertion-3455", "assertion-3459", "assertion-3463", "assertion-3466"],
-    "core" : {
-        "facetLabels" : ["?crash_target", "?crash_event"],
-        "facetFillers" : ["E780874.00294","V780874.00065"],
-        "constraints" : [
-        ["?crash_event", "Conflict.Attack_Attacker", "?crash_attacker"],
-        ["?crash_event", "Conflict.Attack_Instrument", "?crash_instrument"],
-        ["?crash_event", "Conflict.Attack_Place", "?crash_place"]
+    "queryConstraints" : [
+        ["V780874.00065", "Conflict.Attack_Attacker", "?crash_attacker"],
+        ["V780874.00065", "Conflict.Attack_Instrument", "?crash_instrument"],
+        ["V780874.00065", "Conflict.Attack_Place", "?crash_place"]
     ],
-    }
 }]
 
 g = rdflib.Graph()

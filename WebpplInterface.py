@@ -20,7 +20,7 @@ import AnnoExplore
 # * re-encode the graph,
 # * compute pairwise distances between statements
 class WpplInterface:
-    def __init__(self, mygraph, entrypoints):
+    def __init__(self, mygraph, entrypoints, simplification_level = 0):
         self.mygraph = mygraph
         
         self.json_obj = { }
@@ -29,13 +29,23 @@ class WpplInterface:
         self.json_obj["theGraph"] = self._transform_graph()
         # and pairwise statement distances. we consider maximal distances of 5.
         self.dist = { }
-        self.maxdist = 5
+        self.maxdist = 4
 
         # turn distance into proximity
         self.json_obj["statementProximity"] = self._compute_proximity()
 
         # complete the entry point information given 
-        self.json_obj["entrypoints"] = self._characterize_entrypoints(entrypoints)
+        # self.json_obj["entrypoints"] = self._characterize_entrypoints(entrypoints)
+        self.json_obj["entrypoints"] = entrypoints
+
+        # parameters for the one-class cluster generative model
+        self.json_obj["parameters"] = { "shape" :5.0, "scale" : 0.01 }
+
+        # possibly simplify the model if we don't want to deal with the whole complexity of the data.
+        # level 0 = no simplification
+        # level 1 = fewer coref cluster statements
+        # level 2 = no coref cluster statements
+        self._simplify(simplification_level)
         
     def write(self, io):
         json.dump(self.json_obj, io, indent = 1)
@@ -48,16 +58,43 @@ class WpplInterface:
         
         # we write out statements, events, entities, relations
         for node in self.mygraph.nodes():
-            # entities, events: they  have a type. They also have a list of adjacent statement indices to be added later
+            # entities, events: they  have a type. They also have a list of adjacent statements,
+            # and a list of adjacent coref membership statements
             if node.is_entity():
                 retv[ node.shortname() ] = { "type" : "Entity",
-                                             "adjacent" : self._adjacent_statements(node)}
+                                             "adjacent" : self._adjacent_statements(node),
+                                             "adjacentCoref" : self._adjacent_sameas(node) }
             elif node.is_event():
                 retv[ node.shortname() ] = { "type" : "Event",
-                                             "adjacent" : self._adjacent_statements(node)}
+                                             "adjacent" : self._adjacent_statements(node),
+                                             "adjacentCoref" : self._adjacent_sameas(node) }
             elif node.is_relation():
                 retv[ node.shortname() ] = { "type" : "Relation",
                                              "adjacent" : self._adjacent_statements(node)}
+            # node describing a cluster: has a list of adjacent cluster membership statements,
+            # and a prototypical member
+            elif node.is_sameas_cluster():
+                retv[ node.shortname() ] = { "type" : "SameAsCluster",
+                                              "adjacentMembers" : self._adjacent_members(node) }
+                content = node.get("prototype", shorten = True)
+                if len(content) > 0:
+                    retv[node.shortname()]["prototype"] = str(content.pop())                
+            # clusterMembership statements have a cluster, a clusterMember, and a maximal confidence level
+            elif node.is_cluster_membership():
+                retv[ node.shortname() ] = { "type" : "ClusterMembership"}
+                
+                # cluster, clusterMember
+                for label in ["cluster", "clusterMember"]:
+                    content = node.get(label, shorten = True)
+                    if len(content) > 0:
+                        retv[node.shortname()][label] = str(content.pop())
+                
+
+                # confidence
+                conflevels = self.mygraph.confidence_of(node.name)
+                if len(conflevels) > 0:
+                    retv[ node.shortname()]["conf"] = max(conflevels)
+                    
             # statements have a single subj, pred, obj, a maximal confidence level, and possibly mentions
             elif node.is_statement():
                 # type
@@ -79,7 +116,7 @@ class WpplInterface:
 
     # for an entity, relation, or event, determine all statements that mention it
     def _adjacent_statements(self, node):
-        retv = [ ]
+        retv = set()
 
         # check all the neighbor nodes for whether they are statements
         for rel, neighbornodelabels in node.inedge.items():
@@ -88,9 +125,40 @@ class WpplInterface:
                 neighbornode = self._getnode(neighbornodelabel)
                 if neighbornode is not None:
                     if neighbornode.is_statement():
-                        retv.append(neighbornode.shortname())
+                        retv.add(neighbornode.shortname())
                         
-        return retv
+        return list(retv)
+
+    # for an entity, relation, or event, determine all cluster membership statements that it appears in.
+    def _adjacent_sameas(self, node):
+        retv = set()
+
+        # check all the neighbor nodes for whether they are statements
+        for rel, neighbornodelabels in node.inedge.items():
+            for neighbornodelabel in neighbornodelabels:
+
+                neighbornode = self._getnode(neighbornodelabel)
+                if neighbornode is not None:
+                    if neighbornode.is_cluster_membership():
+                        # determine the name of the cluster
+                        retv.add(neighbornode.shortname())
+                        
+        return list(retv)
+
+    # for a SameAsCluster, determine all clusterMembership statements about it
+    def _adjacent_members(self, node):
+        retv = set()
+
+        # check all the neighbor nodes for whether they are statements
+        for rel, neighbornodelabels in node.inedge.items():
+            for neighbornodelabel in neighbornodelabels:
+
+                neighbornode = self._getnode(neighbornodelabel)
+                if neighbornode is not None:
+                    if neighbornode.is_cluster_membership():
+                        retv.add(neighbornode.shortname())
+                        
+        return list(retv)
     
 
     # compute the proximity between statements.
@@ -129,7 +197,8 @@ class WpplInterface:
         # we only do statement nodes.
         self.statements = [ k for k, n in self.mygraph.node_dict.items() if n.is_statement()]
         # we step through neighbors that are EREs or statements
-        visitlabels = set([ k for k, n in self.mygraph.node_dict.items() if n.is_statement() or n.is_ere()])
+        visitlabels = set([ k for k, n in self.mygraph.node_dict.items() if n.is_statement() or n.is_ere() or\
+                                n.is_sameas_cluster() or n.is_cluster_membership()])
 
         # do maxdist steps outwards from each statement node
         for subj in self.statements:
@@ -184,42 +253,80 @@ class WpplInterface:
         return retv.intersection(visitlabels)
 
 
-    # prepare entry point descriptions to be in the right format for wppl.
-    # an entry point is a dictionary with the following entries:
-    # - ere: a list of labels of entities, relations, and events
-    # - statements: a list of labels of statements
-    # - corefacetLabels, corefacetFillers: two lists that together map labels of core facets to their fillers in ERE
-    # (don't ask; it's because there is no way to create updated dictionaries in webppl where the key is stored in a variable)
-    # - coreconstraints: a list of triples [ corefacetID, AIDAedgelabel, corefacetID] where
-    #   statements corresponding to these triples need to be added to the cluster
-    # - candidates: a list of statement labels such that these are exactly the statements that have one of the
-    #   "ere" entries as one of their arguments. these are candidates for addition to the cluster.
-    #
-    # at this point we assume that the entry point has been completely filled in except for the "candidates".
-    # This function modifies the entry points in place, adding candidates
-    # and replacing each statement in "statements" by its ID
-    def _characterize_entrypoints(self, entrypoints):
-        for entrypoint in entrypoints:
+    ## # prepare entry point descriptions to be in the right format for wppl.
+    ## # an entry point is a dictionary with the following entries:
+    ## # - ere: a list of labels of entities, relations, and events
+    ## # - statements: a list of labels of statements
+    ## # - corefacetLabels, corefacetFillers: two lists that together map labels of core facets to their fillers in ERE
+    ## # (don't ask; it's because there is no way to create updated dictionaries in webppl where the key is stored in a variable)
+    ## # - coreconstraints: a list of triples [ corefacetID, AIDAedgelabel, corefacetID] where
+    ## #   statements corresponding to these triples need to be added to the cluster
+    ## # - candidates: a list of statement labels such that these are exactly the statements that have one of the
+    ## #   "ere" entries as one of their arguments. these are candidates for addition to the cluster.
+    ## #
+    ## # at this point we assume that the entry point has been completely filled in except for the "candidates".
+    ## # This function modifies the entry points in place, adding candidates
+    ## # and replacing each statement in "statements" by its ID
+    ## def _characterize_entrypoints(self, entrypoints):
+    ##     for entrypoint in entrypoints:
 
-            # fill in candidates            
-            candidateset = set()
+    ##         # fill in candidates            
+    ##         candidateset = set()
 
-            # for each ERE in the entry point:
-            # its adjacent statements go in the set of candidates
-            for nodelabel in entrypoint["ere"]:
-                if nodelabel in self.json_obj["theGraph"] and \
-                  self.json_obj["theGraph"][nodelabel]["type"] in ["Entity", "Event", "Relation"]:
-                    candidateset.update(self.json_obj["theGraph"][nodelabel]["adjacent"])
+    ##         # for each ERE in the entry point:
+    ##         # its adjacent statements go in the set of candidates
+    ##         for nodelabel in entrypoint["ere"]:
+    ##             if nodelabel in self.json_obj["theGraph"] and \
+    ##               self.json_obj["theGraph"][nodelabel]["type"] in ["Entity", "Event", "Relation"]:
+    ##                 candidateset.update(self.json_obj["theGraph"][nodelabel]["adjacent"])
 
-            # statements that are already part of the entry point don't go into candidates
-            candidateset.difference_update(entrypoint["statements"])
+    ##         # statements that are already part of the entry point don't go into candidates
+    ##         candidateset.difference_update(entrypoint["statements"])
             
-            entrypoint["candidates"] = list(candidateset)
+    ##         entrypoint["candidates"] = list(candidateset)
             
-        return entrypoints
+    ##     return entrypoints
 
     def _getnode(self, nodelabel):
         if nodelabel in self.mygraph.node_dict:
             return self.mygraph.node_dict[nodelabel]
         else: return None
          
+
+    # simplify the graph so we have a simpler problem
+    def _simplify(self, simplification_level, k = 2):
+        if simplification_level == 2:
+            # remove theGraph entries that are coref clusters or coref membership statements
+            self.json_obj["theGraph"] = dict((key, value) for key, value in self.json_obj["theGraph"].items() if \
+                                    self.json_obj["theGraph"][key]["type"] not in ["ClusterMembership", "SameAsCluster"])
+            # from the remaining items, delete adjacentCoref entries
+            for key in self.json_obj["theGraph"].keys():
+                if "adjacentCoref" in self.json_obj["theGraph"][key]:
+                    self.json_obj["theGraph"][key]["adjacentCoref"] = [ ]
+
+        elif simplification_level == 1:
+            # for each coref cluster, only keep the coref membership of the prototype
+            # and k other coref membership statements
+            keep_coref_stmt = [ ]
+
+            # update coref cluster entries to reflect that
+            for key in self.json_obj["theGraph"].keys():
+                if self.json_obj["theGraph"][key]["type"] == "SameAsCluster":
+
+                    value = self.json_obj["theGraph"][key]
+                    # determine the statement label of the coref statement for the prototype
+                    prototype_stmts = [cstmt for cstmt in value["adjacentMembers"] if self.json_obj["theGraph"][cstmt]["clusterMember"] == value["prototype"]]
+                    # determine the first k coref statements that are not the prototype statement
+                    other_stmts = [cstmt for cstmt in value["adjacentMembers"] if cstmt not in prototype_stmts][:k]
+
+                    # remember that we are keeping these
+                    keep_coref_stmt = keep_coref_stmt + prototype_stmts + other_stmts
+                
+                    # and update the graph
+                    self.json_obj["theGraph"][key]["adjacentMembers"] = prototype_stmts + other_stmts
+
+            # update entity and event statements to only list coref statements that we are keeping
+            for key in self.json_obj["theGraph"]:
+                if self.json_obj["theGraph"][key]["type"] in ["Entity", "Event"]:
+                    self.json_obj["theGraph"][key]["adjacentCoref"] = [ cs for cs in self.json_obj["theGraph"][key]["adjacentCoref"] if\
+                                                                            cs in keep_coref_stmt]
