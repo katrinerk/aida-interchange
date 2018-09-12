@@ -35,7 +35,7 @@ result = g.parse(kb_filename, format="ttl")
 mygraph = AidaGraph()
 mygraph.add_graph(g)
 
-wppl_obj = WebpplInterface.WpplInterface(mygraph, entrypoints, simplification_level = 2)
+wppl_obj = WebpplInterface.WpplInterface(mygraph, entrypoints, simplification_level = 0)
 
 outf = open("aidagraph.json", "w")
 wppl_obj.write(outf)

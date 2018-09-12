@@ -26,15 +26,15 @@ class WpplInterface:
         self.json_obj = { }
 
         # re-encode the graph
-        ## self.json_obj["ee"] = [ ]
-        ## self.json_obj["statements"] = [ ]
+        self.json_obj["theGraph"] = { }
+        self.json_obj["ere"] = [ ]
+        self.json_obj["statements"] = [ ]
         ## self.json_obj["coref_statements"] = [ ]
         self.statement_counter = 0
-        self.ee_counter = 0
+        self.ere_counter = 0
         self.coref_counter = 0
         
         self.json_obj["theGraph"] = self._transform_graph()
-        self.json_obj["eeLength"] = self.ee_counter
         # and pairwise statement distances. we consider maximal distances of 5.
         self.dist = { }
         self.maxdist = maxdist
@@ -64,37 +64,41 @@ class WpplInterface:
     def _transform_graph(self):
         retv = { }
 
-        ## self.json_obj["ee"] = [ ]
-        ## self.json_obj["statements"] = [ ]
+        self.json_obj["ere"] = [ ]
+        self.json_obj["statements"] = [ ]
         ## self.json_obj["coref_statements"] = [ ]
         
         self.statement_counter = 0
-        self.ee_counter = 0
+        self.ere_counter = 0
         self.coref_counter = 0
         
         # we write out statements, events, entities, relations
         for node in self.mygraph.nodes():
-            # entities, events: they  have a type. They also have a list of adjacent statements,
-            # and a list of adjacent coref membership statements
+            # entities, events, relations: they  have a type. They also have a list of adjacent statements,
+            # and an index
             if node.is_entity():
                 retv[ node.shortname() ] = { "type" : "Entity",
                                              "adjacent" : self._adjacent_statements(node),
-                                             "index" : self.ee_counter }
+                                             "index" : self.ere_counter }
 
-                self.ee_counter += 1
-                # self.json_obj["ee"].append(node.shortname())
+                self.ere_counter += 1
+                self.json_obj["ere"].append(node.shortname())
                 
             elif node.is_event():
                 retv[ node.shortname() ] = { "type" : "Event",
                                              "adjacent" : self._adjacent_statements(node),
-                                             "index" : self.ee_counter }
+                                             "index" : self.ere_counter }
 
-                self.ee_counter += 1
-                # self.json_obj["ee"].append(node.shortname())
+                self.ere_counter += 1
+                self.json_obj["ere"].append(node.shortname())
                 
             elif node.is_relation():
                 retv[ node.shortname() ] = { "type" : "Relation",
-                                             "adjacent" : self._adjacent_statements(node)}
+                                             "adjacent" : self._adjacent_statements(node),
+                                             "index" : self.ere_counter}
+
+                self.ere_counter += 1
+                self.json_obj["ere"].append(node.shortname())
                 
             # node describing a cluster: has a prototypical member
             elif node.is_sameas_cluster():
@@ -153,7 +157,7 @@ class WpplInterface:
                 # well-formedness check
                 if all(label in retv[node.shortname()] for label in ["conf", "predicate", "subject", "object"]):
                     self.statement_counter += 1
-                    # self.json_obj["statements"].append(node.shortname())
+                    self.json_obj["statements"].append(node.shortname())
                 else:
                     del retv[node.shortname()]
 
@@ -379,7 +383,7 @@ class WpplInterface:
                 
 
             # update the graph
-            self.json_obj["coref_statements"] = keep_coref_stmt
+            # self.json_obj["coref_statements"] = keep_coref_stmt
             
             # update entity and event statements to only list coref statements that we are keeping
             for key in self.json_obj["theGraph"].keys():
