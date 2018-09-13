@@ -39,6 +39,10 @@ class WpplInterface:
         self.dist = { }
         self.maxdist = maxdist
 
+        # in each statement, report possible coref duplicates
+        # commented away as this does not seem to help aidabaseline.wppl
+        # self._list_coref_duplicates()
+
         # turn distance into proximity
         self.json_obj["statementProximity"] = self._compute_proximity()
 
@@ -47,7 +51,7 @@ class WpplInterface:
         self.json_obj["entrypoints"] = entrypoints
 
         # parameters for the one-class cluster generative model
-        self.json_obj["parameters"] = { "shape" :5.0, "scale" : 0.01 }
+        self.json_obj["parameters"] = { "shape" :1.0, "scale" : 0.001 }
 
         # possibly simplify the model if we don't want to deal with the whole complexity of the data.
         # level 0 = no simplification
@@ -347,6 +351,51 @@ class WpplInterface:
         else: return None
          
 
+    def _potential_coref_duplicate(self, stmt1, stmt2, coref_dict):
+        entry1 = self.json_obj["theGraph"][stmt1]
+        entry2 = self.json_obj["theGraph"][stmt2]
+
+        # have to have same predicate
+        if entry1["predicate"] != entry2["predicate"]:
+            return False
+
+        for role in ["subject", "object"]:
+            # not an entity or event? then the two entries need to be exactly the same
+            if entry1[role] not in coref_dict:
+                return entry1[role] == entry2[role]
+            else:
+                # entity or event? then they need to have a coref group in common
+                return entry2[role] in coref_dict[ entry1[role ]]
+            
+    # determine cluster membership, and in each statement in theGraph,
+    # add an entry that lists possible coref duplicates
+    def _list_coref_duplicates(self):
+        # map each cluster member to clusters, and each cluster to cluster members
+        coref_member = { }
+        member_coref = { }
+
+        for label, entry in self.json_obj["theGraph"].items():
+            if entry["type"] == "ClusterMembership":
+                if entry["cluster"] not in coref_member: coref_member[entry["cluster"]] = set()
+                coref_member[entry["cluster"]].add(entry["clusterMember"])
+                if entry["clusterMember"] not in member_coref: member_coref[entry["clusterMember"]] = set()
+                member_coref[entry["clusterMember"]].add(entry["cluster"])
+
+        # map each cluster member to co-cluster members
+        member_member = { }
+        for ee in member_coref.keys():
+            member_member[ ee ] = set()
+            for coref in member_coref[ee]:
+                member_member[ee].update(coref_member[coref])
+
+        # now extend statement entries by duplicates
+        for stmt in self.json_obj["statements"]:
+            self.json_obj["theGraph"][stmt]["maybeCorefDuplicates"] = [ stmt2 for stmt2 in self.json_obj["statements"] if\
+                                                                        stmt != stmt2 and\
+                                                                        self._potential_coref_duplicate(stmt, stmt2, member_member) ]
+
+            
+    
     # simplify the graph so we have a simpler problem
     def _simplify(self, simplification_level, k = 2):
         if simplification_level == 2:
