@@ -67,6 +67,18 @@ for node in mygraph.nodes(targettype="Statement"):
             node_printed = True
         print("Provenance", provenance)
 
+# source document ids for statements
+input("\n*** Listing source document ids associated with statements, "
+      "should be the same as provenances, hit enter\n")
+for node in mygraph.nodes(targettype="Statement"):
+    node_printed = False
+    for source in mygraph.sources_associated_with(node.name):
+        if not node_printed:
+            print("--")
+            node.prettyprint()
+            node_printed = True
+        print("Source", source)
+
 # hypotheses supported by statements
 input("\n*** Listing hypotheses supported by statements, hit enter\n")
 for node in mygraph.nodes(targettype="Statement"):

@@ -277,6 +277,16 @@ class AidaGraph(RDFGraph):
                     for p in jobj["provenance"]:
                         yield p
 
+    # iterator over source document ids associate with the statement node
+    def sources_associated_with(self, nodelabel):
+        if not self.has_node(nodelabel) or \
+                not self.get_node(nodelabel).is_statement():
+            return
+
+        for jlabel in self.get_node_objs(nodelabel, "justifiedBy"):
+            for source in self.get_node_objs(jlabel, "source"):
+                yield source
+
     # iterator over hypotheses supported by the statement node
     def hypotheses_supported(self, nodelabel):
         if not self.has_node(nodelabel) or \

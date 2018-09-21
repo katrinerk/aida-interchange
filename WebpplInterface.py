@@ -158,6 +158,12 @@ class WpplInterface:
                 if len(conflevels) > 0:
                     retv[ node.shortname()]["conf"] = max(conflevels)
 
+                # source document ids
+                sources = set(self.mygraph.sources_associated_with(node.name))
+                if len(sources) > 0:
+                    assert len(sources) == 1, '{}, {}'.format(sources, node.name)
+                    retv[node.shortname()]["source"] = sources.pop()
+
                 # well-formedness check
                 if all(label in retv[node.shortname()] for label in ["conf", "predicate", "subject", "object"]):
                     self.statement_counter += 1
