@@ -52,6 +52,8 @@ class WpplInterface:
 
         # parameters for the one-class cluster generative model
         self.json_obj["parameters"] = { "shape" :1.0, "scale" : 0.001 }
+        self.json_obj["numSamples"] = 100
+        self.json_obj["memberProb"] = 0.1
 
         # possibly simplify the model if we don't want to deal with the whole complexity of the data.
         # level 0 = no simplification
