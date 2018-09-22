@@ -25,7 +25,7 @@ parser.add_option("-n", "--numsamples", action = "store", dest = "numsamples", t
 (options, args) = parser.parse_args()
 
 # reading the AIDA json file
-f = open("aidagraph.json")
+f = open("aidaquery.json")
 json_obj = json.load(f)
 f.close()
 
@@ -45,6 +45,6 @@ if options.scale is not None:
 
 
 # and writing it back out again
-outf = open("aidagraph.json", "w")
+outf = open("aidaquery.json", "w")
 json.dump(json_obj, outf, indent = 1)
 outf.close

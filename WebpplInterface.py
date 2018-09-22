@@ -20,7 +20,8 @@ import AnnoExplore
 # * re-encode the graph,
 # * compute pairwise distances between statements
 class WpplInterface:
-    def __init__(self, mygraph, entrypoints, simplification_level = 0, maxdist = 5):
+    #def __init__(self, mygraph, entrypoints, simplification_level = 0, maxdist = 5):
+    def __init__(self, mygraph, simplification_level = 0, maxdist = 5):
         self.mygraph = mygraph
         
         self.json_obj = { }
@@ -48,7 +49,7 @@ class WpplInterface:
 
         # complete the entry point information given 
         # self.json_obj["entrypoints"] = self._characterize_entrypoints(entrypoints)
-        self.json_obj["entrypoints"] = entrypoints
+        # self.json_obj["entrypoints"] = entrypoints
 
         # parameters for the one-class cluster generative model
         self.json_obj["parameters"] = { "shape" :1.0, "scale" : 0.001 }
