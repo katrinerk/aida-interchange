@@ -19,7 +19,7 @@ for testfilename in sys.argv[1:]:
     mygraph.add_graph(g)
 
 # write out the short names of all ere or statement nodes with their node types
-input("\n*** Printing hort names and node types of all ERE / Statement nodes, "
+input("\n*** Printing short names and node types of all ERE / Statement nodes, "
       "hit enter\n")
 for node in mygraph.nodes():
     if node.is_ere() or node.is_statement():
@@ -44,6 +44,16 @@ for node in mygraph.nodes():
               "at confidence",
               ",".join(str(c) for c in mygraph.confidence_of(
                   type_info.typenode.name)))
+
+# print all names for EREs
+input("\n*** Listing names associated with EREs, from either hasName or "
+      "skos:prefLabel, hit enter\n")
+for node in mygraph.nodes():
+    names = set(mygraph.names_of_ere(node.name))
+    if len(names) > 0:
+        print("--")
+        print("node:", node.shortname())
+        print("has name:", names)
 
 # mentions for statements
 input("\n*** Listing mentions associated with statements, hit enter\n")
@@ -73,6 +83,18 @@ input("\n*** Listing source document ids associated with statements, "
 for node in mygraph.nodes(targettype="Statement"):
     node_printed = False
     for source in mygraph.sources_associated_with(node.name):
+        if not node_printed:
+            print("--")
+            node.prettyprint()
+            node_printed = True
+        print("Source", source)
+
+# source document ids for typing statements
+input("\n*** Listing source document ids associated with typing statements, "
+      "should work for both LDC data and RPI data, hit enter\n")
+for node in mygraph.nodes(targettype="Statement"):
+    node_printed = False
+    for source in mygraph.sources_associated_with_typing_stmt(node.name):
         if not node_printed:
             print("--")
             node.prettyprint()

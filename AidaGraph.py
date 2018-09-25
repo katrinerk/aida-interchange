@@ -55,7 +55,6 @@ class AidaNode(RDFNode):
         """if the node is a ClusterMembership statement"""
         return self.has_type("ClusterMembership", shorten=True)
 
-
     def has_predicate(self, pred, shorten=False):
         """if the node has a predicate relation to a node with label pred"""
         return pred in self.get("predicate", shorten=shorten)
@@ -251,6 +250,18 @@ class AidaGraph(RDFGraph):
                     if subjnode and subjnode.is_kbentry_statement(nodelabel):
                         yield AidaKBEntryInfo(subjnode)
 
+    # iterator over names (from either hasName or skos:prefLabel) of an ERE node
+    def names_of_ere(self, nodelabel):
+        node = self.get_node(nodelabel)
+        if not node or not node.is_ere():
+            return
+
+        for name in node.get("hasName"):
+            yield name.strip()
+        for jlabel in node.get("justifiedBy"):
+            for name in self.get_node_objs(jlabel, "prefLabel"):
+                yield name.strip()
+
     # iterator over mentions associated with the statement node
     def mentions_associated_with(self, nodelabel):
         if not self.has_node(nodelabel) or \
@@ -286,6 +297,26 @@ class AidaGraph(RDFGraph):
         for jlabel in self.get_node_objs(nodelabel, "justifiedBy"):
             for source in self.get_node_objs(jlabel, "source"):
                 yield source
+
+    # iterator over source document ids associate with a typing statement,
+    # this handles both source document information from the statement node,
+    # as well as from the subject ERE node (for RPI data)
+    def sources_associated_with_typing_stmt(self, nodelabel):
+        node = self.get_node(nodelabel)
+        if not node or not node.is_type_statement():
+            return
+
+        # iterator over source document information from the statement node
+        for jlabel in node.get("justifiedBy"):
+            for source in self.get_node_objs(jlabel, "source"):
+                yield source
+
+        # iterator over source document information from the subject ERE node
+        subj_label = node.get("subject").pop()
+        if self.has_node(subj_label):
+            for jlabel in self.get_node_objs(subj_label, "justifiedBy"):
+                for source in self.get_node_objs(jlabel, "source"):
+                    yield source
 
     # iterator over hypotheses supported by the statement node
     def hypotheses_supported(self, nodelabel):
