@@ -19,8 +19,15 @@ RDF = Namespace(
 
 print('Initialize neighbors mapping...')
 neighbors_mapping = {
-    'zero-hop': defaultdict(set),
-    'half-hop': defaultdict(set),
+    # neighbors of EREs in ClusterMembership nodes
+    'zero-hop-ere': defaultdict(set),
+    # neighbors of Clusters in ClusterMembership nodes
+    'zero-hop-cluster': defaultdict(set),
+    # neighbors of subjects in general statements
+    'half-hop-subj': defaultdict(set),
+    # neighbors of objects in general statements
+    'half-hop-obj': defaultdict(set),
+    # one-hop neighbors of EREs in typing statements
     'one-hop': defaultdict(set)
 }
 
@@ -34,8 +41,8 @@ print('Processing ClusterMembership nodes...')
 for coref in g.subjects(predicate=RDF.type, object=AIDA.ClusterMembership):
     for cluster in g.objects(subject=coref, predicate=AIDA.cluster):
         for member in g.objects(subject=coref, predicate=AIDA.clusterMember):
-            neighbors_mapping['zero-hop'][cluster].add(member)
-            neighbors_mapping['zero-hop'][member].add(cluster)
+            neighbors_mapping['zero-hop-ere'][member].add(cluster)
+            neighbors_mapping['zero-hop-cluster'][cluster].add(member)
 print('Done.')
 
 print('Processing Statement nodes...')
@@ -54,9 +61,11 @@ for statement in g.subjects(predicate=RDF.type, object=RDF.Statement):
 
         for subj in g.objects(subject=statement, predicate=RDF.subject):
             for obj in g.objects(subject=statement, predicate=RDF.object):
-                neighbors_mapping[distance][subj].add(obj)
                 if distance == 'half-hop':
-                    neighbors_mapping[distance][obj].add(subj)
+                    neighbors_mapping['half-hop-subj'][subj].add(obj)
+                    neighbors_mapping['half-hop-obj'][obj].add(subj)
+                else:
+                    neighbors_mapping['one-hop'][subj].add(obj)
 print('Done.')
 
 # convert sets to lists for json dump

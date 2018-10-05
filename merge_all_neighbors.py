@@ -8,8 +8,15 @@ fout_path = sys.argv[2]
 
 print('Initialize neighbors mapping...')
 neighbors_mapping_all = {
-    'zero-hop': defaultdict(set),
-    'half-hop': defaultdict(set),
+    # neighbors of EREs in ClusterMembership nodes
+    'zero-hop-ere': defaultdict(set),
+    # neighbors of Clusters in ClusterMembership nodes
+    'zero-hop-cluster': defaultdict(set),
+    # neighbors of subjects in general statements
+    'half-hop-subj': defaultdict(set),
+    # neighbors of objects in general statements
+    'half-hop-obj': defaultdict(set),
+    # one-hop neighbors of EREs in typing statements
     'one-hop': defaultdict(set)
 }
 
@@ -30,4 +37,3 @@ for distance, neighbors in neighbors_mapping_all.items():
 print('Writing json output to {}...'.format(fout_path))
 with open(fout_path, 'w') as fout:
     json.dump(neighbors_mapping_all, fout, indent=2)
-
