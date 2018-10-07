@@ -4,7 +4,11 @@
 # without coreferring EREs or statements,
 # along with a second .json file that details which original EREs/
 # statements correspond to which reduced ones
-
+#
+# usage:
+# python3 coref.py <aidagraph.json> <aidaquery.json>
+#
+# warning: writes new aidagraph.json, aidaquery.json
 
 import json
 import random
@@ -83,10 +87,15 @@ def get_newstmt_label(oldstmt, ereunif, the_graph, oldstmt_newstmt):
     
 ##############
 
-infilename = sys.argv[1]
+infilename1 = sys.argv[1]
+infilename2 = sys.argv[2]
     
-f = open(infilename)
+f = open(infilename1)
 json_in = json.load(f)
+f.close()
+
+f = open(infilename2)
+json_query_in = json.load(f)
 f.close()
 
 
@@ -216,6 +225,41 @@ for stmt1, prox1 in json_in["statementProximity"].items():
     
 json_out["statementProximity"] = proximities
 
+###############
+# update the query file
+
+json_query_out  = { }
+json_query_out["parameters"] = json_query_in["parameters"]
+json_query_out["numSamples"]= json_query_in["numSamples"]
+json_query_out["memberProb"] = json_query_in["memberProb"]
+json_query_out["entrypoints"] = [ ]
+
+for ep in json_query_in["entrypoints"]:
+    newep = { }
+    newere = set()
+    for ere in ep["ere"]:
+        newere.add(ereunif.get(ere, ere))
+
+    newep["ere"] = list(newere)
+
+    newstmt = set()
+    for stmt in ep["statements"]:
+        newstmt.add(get_newstmt_label(stmt, ereunif, json_in["theGraph"], oldstmt_newstmt))
+
+    newep["statements"] = list(newstmt)
+
+    newep["queryConstraints"] = [ ]
+
+    for qc in ep["queryConstraints"]:
+        subj = ereunif.get(qc[0], qc[0])
+        pred = qc[1]
+        obj = ereunif.get(qc[2], qc[2])
+
+        newep["queryConstraints"].append([ subj, pred, obj])
+
+    json_query_out["entrypoints"].append(newep)
+    
+
 ################
 # write output
 outf = open("aidacoreflog.json", "w")
@@ -224,4 +268,8 @@ outf.close()
 
 outf = open("aidagraph.json", "w")
 json.dump(json_out, outf, indent = 1)
+outf.close()
+
+outf = open("aidaquery.json", "w")
+json.dump(json_query_out, outf, indent = 1)
 outf.close()
