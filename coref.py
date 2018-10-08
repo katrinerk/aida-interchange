@@ -8,7 +8,9 @@
 # usage:
 # python3 coref.py <aidagraph.json> <aidaquery.json>
 #
-# warning: writes new aidagraph.json, aidaquery.json
+# writes new aidagraph.json, aidaquery.json.
+# the previous aida graph and query will be copied to
+# original_aidagraph.json and original_aidaquery.json
 
 import json
 import random
