@@ -83,6 +83,8 @@ def make_stmt_key(stmt_entry, unifier):
 # make the statement key and look up the new statement label in the
 # oldstmt_newstmt dictionary
 def get_newstmt_label(oldstmt, ereunif, the_graph, oldstmt_newstmt):
+    if oldstmt not in the_graph:
+        return None
     content = the_graph[oldstmt]
     stmt_key = make_stmt_key(content, ereunif)
     return oldstmt_newstmt[ stmt_key] 
@@ -203,7 +205,10 @@ for newname, oldnames in json_log["ereName"].items():
     for oldname in oldnames:
         for oldstmt in json_in["theGraph"][oldname]["adjacent"]:
             newstmt = get_newstmt_label(oldstmt, ereunif, json_in["theGraph"], oldstmt_newstmt)
-            adjacent.add(newstmt)
+            if newstmt is None:
+                print("error:", oldstmt, "missing in theGraph")
+            else:
+                adjacent.add(newstmt)
     
     json_out["theGraph"][newname]["adjacent"] = list(adjacent)
     
