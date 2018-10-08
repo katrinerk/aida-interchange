@@ -262,6 +262,15 @@ for ep in json_query_in["entrypoints"]:
 
 ################
 # write output
+outf = open("original_aidagraph.json", "w")
+json.dump(json_in, outf, indent = 1)
+outf.close()
+
+outf = open("original_aidaquery.json", "w")
+json.dump(json_query_in, outf, indent = 1)
+outf.close()
+
+    
 outf = open("aidacoreflog.json", "w")
 json.dump(json_log, outf, indent = 1)
 outf.close()
