@@ -223,11 +223,15 @@ proximities = { }
 # new statement proximity: maximum of proximities of old statements
 for stmt1, prox1 in json_in["statementProximity"].items():
     newstmt1 = get_newstmt_label(stmt1, ereunif, json_in["theGraph"], oldstmt_newstmt)
+    if newstmt1 is None:
+        continue
     if newstmt1 not in proximities:
         proximities[newstmt1] = { }
         
     for stmt2, value in prox1.items():
         newstmt2 = get_newstmt_label(stmt2, ereunif, json_in["theGraph"], oldstmt_newstmt)
+        if newstmt2 is None:
+            continue
         proximities[newstmt1][newstmt2] = max(value, proximities[newstmt1].get(newstmt2, 0))
     
 json_out["statementProximity"] = proximities
@@ -251,7 +255,9 @@ for ep in json_query_in["entrypoints"]:
 
     newstmt = set()
     for stmt in ep["statements"]:
-        newstmt.add(get_newstmt_label(stmt, ereunif, json_in["theGraph"], oldstmt_newstmt))
+        label = get_newstmt_label(stmt, ereunif, json_in["theGraph"], oldstmt_newstmt)
+        if label is not None:
+            newstmt.add(label)
 
     newep["statements"] = list(newstmt)
 
