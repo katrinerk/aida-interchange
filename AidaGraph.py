@@ -228,6 +228,10 @@ class AidaGraph(RDFGraph):
         for clabel in self.get_node_objs(nodelabel, "confidence"):
             for c in self.get_node_objs(clabel, "confidenceValue"):
                 confidenceValues.add(float(c))
+        for jlabel in self.get_node_objs(nodelabel, "justifiedBy"):
+            for clabel in self.get_node_objs(jlabel, "confidence"):
+                for c in self.get_node_objs(clabel, "confidenceValue"):
+                    confidenceValues.add(float(c))
 
         return confidenceValues
 
