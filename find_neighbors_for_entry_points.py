@@ -122,7 +122,7 @@ def find_half_hop_neighbors(ere_closure, neighbors_mapping):
 
 
 def find_neighbors_for_entry_point(
-        entry_points, neighbors_mapping, verbose=False):
+        starting_eres, neighbors_mapping, verbose=False):
     all_neighbors = {
         'eres': set([]),
         'clusters': set([]),
@@ -133,7 +133,8 @@ def find_neighbors_for_entry_point(
 
     # search for all zero-hop neighbors
     ere_closure_zero, cluster_closure_zero, cluster_memberships_zero = \
-        find_coref_closure(entry_points, neighbors_mapping, start_from_ere=True)
+        find_coref_closure(
+            starting_eres, neighbors_mapping, start_from_ere=True)
 
     if verbose:
         print('\nEREs zero-hop from the entry point: \n{}'.format(
@@ -207,8 +208,8 @@ def find_neighbors_for_entry_point(
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('entry_points',
-                        help='a list of entry point nodes, split by comma')
+    parser.add_argument('query_path',
+                        help='path to aidaquery.json')
     parser.add_argument('neighbors_mapping_path',
                         help='path to neighbors_mapping.json file')
     parser.add_argument('output_path', help='path to write output')
@@ -216,8 +217,15 @@ def main():
 
     args = parser.parse_args()
 
-    entry_points = set(args.entry_points.split(','))
-    print('Looking for neighbors of entry points: {}'.format(entry_points))
+    with open(args.query_path, 'r') as fin:
+        aida_query = json.load(fin)
+
+    # entry_points = set(args.entry_points.split(','))
+
+    starting_eres = set([])
+    for entry_point in aida_query['entrypoints']:
+        starting_eres.update(entry_point['ere'])
+    print('Looking for neighbors of entry points: {}'.format(starting_eres))
 
     neighbors_mapping_path = args.neighbors_mapping_path
     print('Loading neighbor information from {}...'.format(
@@ -226,7 +234,7 @@ def main():
         neighbors_mapping = json.load(fin)
 
     all_neighbors = find_neighbors_for_entry_point(
-        entry_points, neighbors_mapping, verbose=args.verbose)
+        starting_eres, neighbors_mapping, verbose=args.verbose)
 
     # convert sets to lists for json dump
     for key in all_neighbors:
