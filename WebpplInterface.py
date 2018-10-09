@@ -84,95 +84,103 @@ class WpplInterface:
             # entities, events, relations: they  have a type. They also have a list of adjacent statements,
             # and an index
             if node.is_entity():
-                retv[ node.shortname() ] = { "type" : "Entity",
-                                             "adjacent" : self._adjacent_statements(node),
-                                             "index" : self.ere_counter }
+                retv[node.name] = {
+                    "type": "Entity",
+                    "adjacent": self._adjacent_statements(node),
+                    "index": self.ere_counter}
 
                 self.ere_counter += 1
-                self.json_obj["ere"].append(node.shortname())
+                self.json_obj["ere"].append(node.name)
                 
             elif node.is_event():
-                retv[ node.shortname() ] = { "type" : "Event",
-                                             "adjacent" : self._adjacent_statements(node),
-                                             "index" : self.ere_counter }
+                retv[node.name] = {
+                    "type": "Event",
+                    "adjacent": self._adjacent_statements(node),
+                    "index": self.ere_counter}
 
                 self.ere_counter += 1
-                self.json_obj["ere"].append(node.shortname())
+                self.json_obj["ere"].append(node.name)
                 
             elif node.is_relation():
-                retv[ node.shortname() ] = { "type" : "Relation",
-                                             "adjacent" : self._adjacent_statements(node),
-                                             "index" : self.ere_counter}
+                retv[node.name] = {
+                    "type": "Relation",
+                    "adjacent": self._adjacent_statements(node),
+                    "index": self.ere_counter}
 
                 self.ere_counter += 1
-                self.json_obj["ere"].append(node.shortname())
+                self.json_obj["ere"].append(node.name)
                 
             # node describing a cluster: has a prototypical member
             elif node.is_sameas_cluster():
-                retv[ node.shortname() ] = { "type" : "SameAsCluster" }
+                retv[node.name] = {"type": "SameAsCluster"}
                 
-                content = node.get("prototype", shorten = True)
+                content = node.get("prototype", shorten=False)
                 if len(content) > 0:
                     # record this node only if it has a prototype as required
-                    retv[node.shortname()]["prototype"] = str(content.pop())
+                    retv[node.name]["prototype"] = str(content.pop())
                 else:
-                    del retv[node.shortname()]
+                    del retv[node.name]
 
             # clusterMembership statements have a cluster, a clusterMember, and a maximal confidence level
             elif node.is_cluster_membership():
-                retv[ node.shortname() ] = { "type" : "ClusterMembership",
-                                             "index" : self.coref_counter }
+                retv[node.name] = {
+                    "type": "ClusterMembership",
+                    "index": self.coref_counter}
 
                 # cluster, clusterMember
                 for label in ["cluster", "clusterMember"]:
-                    content = node.get(label, shorten = True)
+                    content = node.get(label, shorten=False)
                     if len(content) > 0:
-                        retv[node.shortname()][label] = str(content.pop())
+                        retv[node.name][label] = str(content.pop())
                 
 
                 # confidence
                 conflevels = self.mygraph.confidence_of(node.name)
                 if len(conflevels) > 0:
-                    retv[ node.shortname()]["conf"] = max(conflevels)
+                    retv[ node.name]["conf"] = max(conflevels)
 
                 # check that the node is well-formed
-                if all(label in retv[node.shortname()] for label in ["cluster", "clusterMember", "conf"]):
+                if all(label in retv[node.name] for label in ["cluster", "clusterMember", "conf"]):
                     self.coref_counter += 1
-                    # self.json_obj["coref_statements"].append(node.shortname())
+                    # self.json_obj["coref_statements"].append(node.name)
                 else:
-                    del retv[node.shortname()]
+                    del retv[node.name]
                   
                     
             # statements have a single subj, pred, obj, a maximal confidence level, and possibly mentions
             elif node.is_statement():
                 # type
-                retv[ node.shortname() ] = { "type" : "Statement",
-                                             "index" : self.statement_counter}
+                retv[node.name] = {
+                    "type": "Statement",
+                    "index": self.statement_counter}
 
                 # predicate, subject, object
-                for label in ["predicate", "subject", "object"]:
-                    content = node.get(label, shorten = True)
+                for label in ["subject", "object"]:
+                    content = node.get(label, shorten=False)
                     if len(content) > 0:
-                        retv[node.shortname()][label] = str(content.pop())
-                
+                        retv[node.name][label] = str(content.pop())
+
+                predicates = node.get("predicate", shorten=True)
+                if len(predicates) > 0:
+                    retv[node.name]["predicate"] = str(predicates.pop())
 
                 # confidence
                 conflevels = self.mygraph.confidence_of(node.name)
                 if len(conflevels) > 0:
-                    retv[ node.shortname()]["conf"] = max(conflevels)
+                    retv[ node.name]["conf"] = max(conflevels)
 
                 # source document ids
                 sources = set(self.mygraph.sources_associated_with(node.name))
                 if len(sources) > 0:
                     assert len(sources) == 1, '{}, {}'.format(sources, node.name)
-                    retv[node.shortname()]["source"] = sources.pop()
+                    retv[node.name]["source"] = sources.pop()
 
                 # well-formedness check
-                if all(label in retv[node.shortname()] for label in ["conf", "predicate", "subject", "object"]):
+                if all(label in retv[node.name] for label in ["conf", "predicate", "subject", "object"]):
                     self.statement_counter += 1
-                    self.json_obj["statements"].append(node.shortname())
+                    self.json_obj["statements"].append(node.name)
                 else:
-                    del retv[node.shortname()]
+                    del retv[node.name]
 
         ## # replace labels by label indices in adjacency statements
         ## for nodelabel in retv:
@@ -192,7 +200,7 @@ class WpplInterface:
                 neighbornode = self._getnode(neighbornodelabel)
                 if neighbornode is not None:
                     if neighbornode.is_statement():
-                        retv.add(neighbornode.shortname())
+                        retv.add(neighbornode.name)
                         
         return list(retv)
 
@@ -208,7 +216,7 @@ class WpplInterface:
     ##             if neighbornode is not None:
     ##                 if neighbornode.is_cluster_membership():
     ##                     # determine the name of the cluster
-    ##                     retv.add(neighbornode.shortname())
+    ##                     retv.add(neighbornode.name)
                         
     ##     return list(retv)
 
@@ -223,7 +231,7 @@ class WpplInterface:
     ##             neighbornode = self._getnode(neighbornodelabel)
     ##             if neighbornode is not None:
     ##                 if neighbornode.is_cluster_membership():
-    ##                     retv.add(neighbornode.shortname())
+    ##                     retv.add(neighbornode.name)
                         
     ##     return list(retv)
     
@@ -272,7 +280,7 @@ class WpplInterface:
             subjnode = self._getnode(subj)
             if subjnode is None: continue
 
-            subjlabel = subjnode.shortname()
+            subjlabel = subjnode.name
             
             # next round of nodes to visit: neighbors of subj
             fringe = self._valid_neighbors(subjnode, visitlabels)
@@ -285,7 +293,7 @@ class WpplInterface:
                     objnode = self._getnode(obj)
                     if objnode is None: continue
 
-                    objlabel = objnode.shortname()
+                    objlabel = objnode.name
                     
                     if objnode.is_statement():
                         # keep track of distance only if this is a statement node
