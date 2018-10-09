@@ -45,7 +45,7 @@ for cluster in json_in["support"]:
         newstatements = newstatements + json_log["stmtName"][stmt]
 
     # append all the coref statements
-    newstatements.append(json_log["coref"])
+    newstatements.extend(json_log["coref"])
 
     # and done with this cluster
     newcluster["statements"] = newstatements
