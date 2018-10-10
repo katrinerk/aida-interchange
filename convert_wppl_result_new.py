@@ -4,18 +4,12 @@ from operator import itemgetter
 from os import makedirs
 from os.path import exists, join
 import subprocess
+from pathlib import Path
 
 
-db_path_list = [
-    '/home/cc/aida/tdb_database_P103_Q004',
-    '/home/cc/aida/tdb_database_P103_Q004_copy',
-    '/home/cc/aida/tdb_database_P103_Q004_copy2',
-    '/home/cc/aida/tdb_database_P103_Q004_copy3',
-    '/home/cc/aida/tdb_database_P103_Q004_copy4'
-]
-
-
-def queries_for_aida_result(aida_graph, result, num_stmts_per_query=3000):
+def queries_for_aida_result(
+        aida_graph, result, soin_id, num_node_queries=3,
+        num_stmts_per_query=3000):
     node_query_prefix = 'DESCRIBE '
     stmt_query_prefix = \
         'PREFIX rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n' \
@@ -60,10 +54,14 @@ def queries_for_aida_result(aida_graph, result, num_stmts_per_query=3000):
 
         elif stmt_entry['type'] == 'ClusterMembership':
             # do not handle facet-cluster-membership entries for now
-            if stmt.startswith('facet-cluster'):
-                continue
+            # if stmt.startswith('facet-cluster'):
+            #     continue
 
             cluster_id = stmt_entry['cluster']
+            if cluster_id.startswith('facet-cluster'):
+                cluster_id = \
+                    'http://www.utexas.edu/aida/entrypoint-coref/{}/{}'.format(
+                        soin_id, cluster_id)
             member_id = stmt_entry['clusterMember']
 
             node_query_item_list.append('<{}>'.format(cluster_id))
@@ -78,8 +76,6 @@ def queries_for_aida_result(aida_graph, result, num_stmts_per_query=3000):
 
     node_query_item_list = list(set(node_query_item_list))
     stmt_query_item_list = list(set(stmt_query_item_list))
-
-    num_node_queries = (len(db_path_list) - 1)
 
     num_nodes = len(node_query_item_list)
     split_num = int(num_nodes / num_node_queries)
@@ -140,6 +136,8 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('aida_graph_path', help='path to aidagraph.json')
     parser.add_argument('aida_result_path', help='path to aidaresult.json')
+    parser.add_argument('db_path_prefix', help='prefix of tdb database path')
+    parser.add_argument('soin_id', help='id of the SOIN')
     parser.add_argument('output_dir', help='path to output directory')
     parser.add_argument('--top', default=3, type=int,
                         help='number of top hypothesis to output')
@@ -161,12 +159,19 @@ def main():
     print('Found {} hypothesese with probability {}'.format(
         len(aida_result['probs']), aida_result['probs']))
 
+    db_path_prefix = Path(args.db_path_prefix)
+    db_path_list = [str(path) for path in sorted(db_path_prefix.glob('copy*'))]
+    print('Using the following tdb databases to query: {}'.format(db_path_list))
+
+    num_node_queries = (len(db_path_list) - 1)
+
     top_count = 0
     for result_idx, prob in sorted(
             enumerate(aida_result['probs']), key=itemgetter(1), reverse=True):
         result = aida_result['support'][result_idx]
         node_query_list, stmt_query_list = \
-            queries_for_aida_result(aida_graph, result)
+            queries_for_aida_result(aida_graph, result, soin_id=args.soin_id,
+                                    num_node_queries=num_node_queries)
 
         top_count += 1
 
