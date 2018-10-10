@@ -4,7 +4,6 @@
 # usage:
 # python3 generate_wppl.py <interchangeformatdir> 
 
-
 import sys
 import os
 import rdflib
@@ -14,8 +13,12 @@ import pickle
 from AidaGraph import AidaGraph, AidaNode
 import AnnoExplore
 import WebpplInterface
+import logging
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(message)s')
 
 kb_filename = sys.argv[1]
+output_filename = sys.argv[2]
 
 
 #entrypoints = [{
@@ -29,15 +32,24 @@ kb_filename = sys.argv[1]
 #    ],
 #}]
 
+logging.info('Reading kb from {}...'.format(kb_filename))
 g = rdflib.Graph()
 result = g.parse(kb_filename, format="ttl")
+logging.info('Done.')
 
+logging.info('Building AidaGraph with {} triples...'.format(len(g)))
 mygraph = AidaGraph()
 mygraph.add_graph(g)
+logging.info('Done.')
 
 #wppl_obj = WebpplInterface.WpplInterface(mygraph, entrypoints, simplification_level = 0)
+logging.info('Building input aidagraph.json for webppl...')
 wppl_obj = WebpplInterface.WpplInterface(mygraph, simplification_level = 0)
+logging.info('Done.')
 
-outf = open("aidagraph.json", "w")
+
+logging.info('Writing output to {}...'.format(output_filename))
+outf = open(output_filename, 'w')
 wppl_obj.write(outf)
 outf.close()
+logging.info('Done.')

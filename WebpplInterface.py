@@ -13,6 +13,8 @@ import json
 from first import first
 from AidaGraph import AidaGraph, AidaNode
 import AnnoExplore
+import logging
+from tqdm import tqdm
 
 
 ###########
@@ -34,7 +36,7 @@ class WpplInterface:
         self.statement_counter = 0
         self.ere_counter = 0
         self.coref_counter = 0
-        
+
         self.json_obj["theGraph"] = self._transform_graph()
         # and pairwise statement distances. we consider maximal distances of 5.
         self.dist = { }
@@ -69,6 +71,8 @@ class WpplInterface:
     # functions that are actually doing the work
 
     def _transform_graph(self):
+        logging.info('Transforming the graph...')
+
         retv = { }
 
         self.json_obj["ere"] = [ ]
@@ -80,7 +84,7 @@ class WpplInterface:
         self.coref_counter = 0
         
         # we write out statements, events, entities, relations
-        for node in self.mygraph.nodes():
+        for node in tqdm(self.mygraph.nodes()):
             # entities, events, relations: they  have a type. They also have a list of adjacent statements,
             # and an index
             if node.is_entity():
@@ -187,6 +191,8 @@ class WpplInterface:
         ##     if "adjacent" in retv[nodelabel]:
         ##         retv[nodelabel]["adjacent"] = [ retv[stmt]["index"] for stmt in retv[nodelabel]["adjacent"]]
 
+        logging.info('Done.')
+
         return retv
 
     # for an entity, relation, or event, determine all statements that mention it
@@ -243,12 +249,15 @@ class WpplInterface:
         # get pairwise node distances
         # in the shape of a dictionary
         # self.dist: node label -> node label -> distance
+        logging.info('Computing node distances...')
         self._compute_node_distances()
+        logging.info('Done.')
 
+        logging.info('Computing statement proximity...')
         # compute unit proximity
         retv = { }
         
-        for stmt1 in self.dist.keys():
+        for stmt1 in tqdm(self.dist.keys()):
             # sum of proximities for reachable nodes
             sumprox = sum(self.maxdist - dist for dist in self.dist[stmt1].values())
 
@@ -257,6 +266,8 @@ class WpplInterface:
                 retv[stmt1] = { }
                 for stmt2 in self.dist[stmt1].keys():
                     retv[stmt1][stmt2] = (self.maxdist - self.dist[stmt1][stmt2]) / sumprox
+
+        logging.info('Done.')
 
         return retv
  
@@ -276,7 +287,7 @@ class WpplInterface:
                                 n.is_sameas_cluster() or n.is_cluster_membership()])
 
         # do maxdist steps outwards from each statement node
-        for subj in self.statements:
+        for subj in tqdm(self.statements):
             subjnode = self._getnode(subj)
             if subjnode is None: continue
 
