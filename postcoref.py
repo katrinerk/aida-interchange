@@ -5,26 +5,28 @@
 # if aidabaseline.wppl had run without coref transformation
 #
 # usage:
-# python3 postcoref.py <aidaresult.json> <aidacoreflog.json>
+# python3 postcoref.py <aidaresult.json> <coref_log.json> <aidaresult_output.json>
 #
-# writes new aidaresult.json.
-# the previous aida results file will be in original_aidaresult.json
+# writes new aidaresult_output.json.
 
 import json
-import random
-import sys
+from argparse import ArgumentParser
 
-infilename1 = sys.argv[1]
-infilename2 = sys.argv[2]
-    
-f = open(infilename1)
-json_in = json.load(f)
-f.close()
+parser = ArgumentParser()
+parser.add_argument('input_aidaresult',
+                    help='path to input aidaresult.json file')
+parser.add_argument('coref_log',
+                    help='path to coref_log.json file from coref.py')
+parser.add_argument('output_aidaresult',
+                    help='path to output aidaresult.json file')
 
-f = open(infilename2)
-json_log = json.load(f)
-f.close()
+args = parser.parse_args()
 
+with open(args.input_aidaresult, 'r') as fin:
+    json_in = json.load(fin)
+
+with open(args.coref_log, 'r') as fin:
+    json_log = json.load(fin)
 
 # this is going to be the new aidaresult.json
 json_out = { }
@@ -54,12 +56,6 @@ for cluster in json_in["support"]:
 
 ################
 # write output
-outf = open("original_aidaresult.json", "w")
-json.dump(json_in, outf, indent = 1)
-outf.close()
 
-outf = open("aidaresult.json", "w")
-json.dump(json_out, outf, indent = 1)
-outf.close()
-
-    
+with open(args.output_aidaresult, "w") as fout:
+    json.dump(json_out, fout, indent = 1)
