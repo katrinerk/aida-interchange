@@ -7,14 +7,14 @@
 #
 # usage:
 # python3 coref.py <aidagraph.json> <aidaquery.json>
+# <aidagraph_output.json> <aidaquery_output.json> <coref_log.json>
 #
-# writes new aidagraph.json, aidaquery.json.
-# the previous aida graph and query will be copied to
-# original_aidagraph.json and original_aidaquery.json
+# writes new aidagraph_output.json, aidaquery_output.json.
 
 import json
 import random
-import sys
+from argparse import ArgumentParser
+
 
 class EREUnify:
     def __init__(self):
@@ -69,7 +69,7 @@ def make_stmt_key(stmt_entry, unifier):
     subj = stmt_entry["subject"]
     if subj in unifier:
         subj = unifier[subj]
-        
+
 
     pred = stmt_entry["predicate"]
     
@@ -91,16 +91,25 @@ def get_newstmt_label(oldstmt, ereunif, the_graph, oldstmt_newstmt):
     
 ##############
 
-infilename1 = sys.argv[1]
-infilename2 = sys.argv[2]
-    
-f = open(infilename1)
-json_in = json.load(f)
-f.close()
+parser = ArgumentParser()
+parser.add_argument('input_aidagraph',
+                    help='path to input aidagraph.json file')
+parser.add_argument('input_aidaquery',
+                    help='path to input aidaquery.json file')
+parser.add_argument('output_aidagraph',
+                    help='path to output aidagraph.json file')
+parser.add_argument('output_aidaquery',
+                    help='path to output aidaquery.json file')
+parser.add_argument('output_coref_log',
+                    help='path to output coref_log.json file')
 
-f = open(infilename2)
-json_query_in = json.load(f)
-f.close()
+args = parser.parse_args()
+
+with open(args.input_aidagraph, 'r') as fin:
+    json_in = json.load(fin)
+
+with open(args.input_aidaquery, 'r') as fin:
+    json_query_in = json.load(fin)
 
 
 # this is going to be the new aidagraph.json
@@ -271,27 +280,16 @@ for ep in json_query_in["entrypoints"]:
         newep["queryConstraints"].append([ subj, pred, obj])
 
     json_query_out["entrypoints"].append(newep)
-    
+
 
 ################
 # write output
-outf = open("original_aidagraph.json", "w")
-json.dump(json_in, outf, indent = 1)
-outf.close()
 
-outf = open("original_aidaquery.json", "w")
-json.dump(json_query_in, outf, indent = 1)
-outf.close()
+with open(args.output_coref_log, "w") as fout:
+    json.dump(json_log, fout, indent = 1)
 
-    
-outf = open("aidacoreflog.json", "w")
-json.dump(json_log, outf, indent = 1)
-outf.close()
+with open(args.output_aidagraph, "w") as fout:
+    json.dump(json_out, fout, indent = 1)
 
-outf = open("aidagraph.json", "w")
-json.dump(json_out, outf, indent = 1)
-outf.close()
-
-outf = open("aidaquery.json", "w")
-json.dump(json_query_out, outf, indent = 1)
-outf.close()
+with open(args.output_aidaquery, "w") as fout:
+    json.dump(json_query_out, fout, indent = 1)
