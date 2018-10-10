@@ -1,13 +1,20 @@
 import json
-import sys
+from argparse import ArgumentParser
 
-aidagraph_path = sys.argv[1]
-aidaquery_path = sys.argv[2]
+parser = ArgumentParser()
+parser.add_argument('input_aidagraph',
+                    help='path to input aidagraph.json file')
+parser.add_argument('input_aidaquery',
+                    help='path to input aidaquery.json file')
+parser.add_argument('output_aidagraph',
+                    help='path to output aidagraph.json file')
 
-with open(aidagraph_path, 'r') as fin:
+args = parser.parse_args()
+
+with open(args.input_aidagraph, 'r') as fin:
     aidagraph = json.load(fin)
 
-with open(aidaquery_path, 'r') as fin:
+with open(args.input_aidaquery, 'r') as fin:
     aidaquery = json.load(fin)
 
 prototypes = set([])
@@ -46,7 +53,5 @@ for cluster, member_list in aidaquery['coref'].items():
         if member in prototypes:
             aidagraph['theGraph'][cluster_name]['prototype'] = member
 
-new_aidagraph_path = sys.argv[3]
-
-with open(new_aidagraph_path, 'w') as fout:
+with open(args.output_aidagraph, 'w') as fout:
     json.dump(aidagraph, fout, indent=1)
