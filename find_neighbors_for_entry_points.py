@@ -223,8 +223,10 @@ def main():
     # entry_points = set(args.entry_points.split(','))
 
     starting_eres = set([])
-    for entry_point in aida_query['entrypoints']:
-        starting_eres.update(entry_point['ere'])
+    for cluster, mentions in aida_query['coref'].items():
+        starting_eres.update(mentions)
+    # for entry_point in aida_query['entrypoints']:
+    #     starting_eres.update(entry_point['ere'])
     print('Looking for neighbors of entry points: {}'.format(starting_eres))
 
     neighbors_mapping_path = args.neighbors_mapping_path

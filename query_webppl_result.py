@@ -43,7 +43,7 @@ def queries_for_aida_result(
                 node_query_item_list.append('<{}>'.format(object_id))
 
                 stmt_query_item_list.append(
-                    '{{\n?x rdf:subj <{}> .\n?x rdf:predicate '
+                    '{{\n?x rdf:subject <{}> .\n?x rdf:predicate '
                     'domainOntology:{} .\n?x rdf:object <{}> .\n}}'.format(
                         subject_id, predicate_id, object_id))
 
