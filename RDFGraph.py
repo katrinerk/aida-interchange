@@ -106,7 +106,7 @@ class RDFNode:
 
     # prettyprint: write the node name, and all pred/object pairs, all in short form
     def prettyprint(self, omit=None):
-        print(self.shortname())
+        print("Node name", self.shortname())
         for pred, obj in self.outedge.items():
             if omit is None or self.shortlabel(pred) not in omit:
                 print("\t", self.shortlabel(pred), ":", " ".join(self.shortlabel(o) for o in obj))

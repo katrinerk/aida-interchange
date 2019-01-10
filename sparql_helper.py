@@ -1,3 +1,6 @@
+# Pengxiang Cheng Fall 2018
+# pre- and postprocessing for the AIDA eval
+
 from os.path import exists, join
 from os import makedirs
 import subprocess

@@ -1,3 +1,7 @@
+# Pengxiang Cheng Fall 2018:
+# preprocessing for AIDA eval
+# part of toolchain for coref compression
+
 import json
 from argparse import ArgumentParser
 from io import BytesIO
