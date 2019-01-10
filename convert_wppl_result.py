@@ -1,3 +1,6 @@
+# Pengxiang Cheng Fall 2018
+# Pre- and postprocessing for AIDA eval
+
 import json
 from argparse import ArgumentParser
 from io import BytesIO

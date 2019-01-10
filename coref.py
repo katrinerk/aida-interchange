@@ -1,4 +1,6 @@
 # Katrin Erk Oct 7 2018
+# pre- and postprocessing for AIDA eval
+#
 # resolve all coreferences in an aidagraph.json data
 # structure, and write a reduced aidagraph.json data structure
 # without coreferring EREs or statements,

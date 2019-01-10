@@ -1,3 +1,7 @@
+# Pengchiang Cheng Fall 2018
+# Preprocessing for AIDA eval
+# part of scripts for coref compression
+
 import json
 from argparse import ArgumentParser
 

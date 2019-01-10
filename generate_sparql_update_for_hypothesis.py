@@ -1,3 +1,6 @@
+# Pengxiang Cheng Fall 2018
+# part of pre- and postprocessing for AIDA eval
+
 from argparse import ArgumentParser
 from os import makedirs
 from os.path import exists, join

@@ -1,3 +1,6 @@
+# Pengxiang Cheng Fall 2018
+# pre- and postprocessing for AIDA eval
+
 import json
 import sys
 from collections import defaultdict
