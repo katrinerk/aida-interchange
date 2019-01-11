@@ -1,6 +1,6 @@
 import rdflib
 import sys
-from AidaGraph import AidaGraph
+from aif import AidaGraph
 
 input_path = sys.argv[1]
 

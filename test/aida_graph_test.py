@@ -2,11 +2,12 @@
 # a script illustrating different things that can be done with an AIDA graph object.
 # call with a single .ttl file as its argument
 
-import rdflib
 import sys
-from AidaGraph import AidaGraph
-from RDFGraph import RDFNode
 from itertools import combinations
+
+import rdflib
+
+from aif import AidaGraph, RDFNode
 
 mygraph = AidaGraph()
 

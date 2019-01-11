@@ -1,10 +1,9 @@
 """builds on RDFGraph, has higher-level access"""
 
-import queue
 import json
+import queue
 
-from RDFGraph import RDFGraph, RDFNode
-
+from .rdf_graph import RDFGraph, RDFNode
 
 omit_labels = ("system", "confidence", "privateData", "justifiedBy")
 
@@ -147,7 +146,9 @@ class AidaWhoisInfo:
     def add_outedge(self, pred, node, whois_info):
         self.outedge_info.append((pred, node, whois_info))
 
-    def prettyprint(self, indent=0, omit=[]):
+    def prettyprint(self, indent=0, omit=None):
+        if omit is None:
+            omit = []
         # node type and predicate
         if self.node is not None:
             print("\t" * indent, "Node", self.node.shortname())
@@ -414,7 +415,7 @@ class AidaGraph(RDFGraph):
             return None
 
         node = self.get_node(nodelabel)
-        
+
         whois_info = AidaWhoisInfo(node)
 
         # we do have an entry for this node.

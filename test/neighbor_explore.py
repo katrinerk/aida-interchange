@@ -5,9 +5,11 @@
 #
 # call with a single .ttl file as its argument
 
-import rdflib
 import sys
-from AidaGraph import AidaGraph
+
+import rdflib
+
+from aif import AidaGraph
 
 testfilename = sys.argv[1]
 

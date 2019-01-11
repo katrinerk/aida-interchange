@@ -10,8 +10,7 @@ import sys
 
 import rdflib
 
-import WebpplInterface
-from AidaGraph import AidaGraph
+from aif import AidaGraph, JsonInterface
 
 logging.basicConfig(
     level=logging.DEBUG, format='%(asctime)s - %(message)s')
@@ -30,7 +29,7 @@ mygraph.add_graph(g)
 logging.info('Done.')
 
 logging.info('Building input aidagraph.json for webppl...')
-wppl_obj = WebpplInterface.WpplInterface(mygraph, simplification_level=0)
+wppl_obj = JsonInterface(mygraph, simplification_level=0)
 logging.info('Done.')
 
 logging.info('Writing output to {}...'.format(output_filename))

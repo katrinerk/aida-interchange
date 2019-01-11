@@ -1,14 +1,11 @@
 # Finding conflicting statements in LDC AIDA annotation
 #
 
-import sys
-import os
-import rdflib
-import csv
-from first import first
-import pickle
-from AidaGraph import AidaGraph, AidaNode
-from AnnoExplore import LDCAnno
+from tqdm import tqdm
+from aif import RDFNode
+from itertools import combinations
+from collections import defaultdict
+
 
 ######################################3
 class ConflictingEvidence:
@@ -42,13 +39,22 @@ class ConflictingEvidence:
         # pathlabel -> path
         self.conflict_path = { }
 
-        for mention, graphnodes in self.ldcanno_obj.mention_graphnodes.items():
+        print('Detecting conflicting path')
+
+        for mention, graphnodes in tqdm(self.ldcanno_obj.mention_graphnodes.items()):
+            print('Processing mention {} with graphnodes {}'.format(
+                mention, list(map(RDFNode.shortlabel, graphnodes))))
+
             # we have a mention, and the graph nodes associated with it.
             # if the mention is associated with hypotheses, traverse the graph from all its
             # associated nodes
             if mention in self.ldcanno_obj.mention_hypothesis:
+                print('Found hypothesis associated with mention {}'.format(mention))
 
                 for startnodelabel in graphnodes:
+                    print('Processing node label {} associated with mention {}'.format(
+                        RDFNode.shortlabel(startnodelabel), mention))
+
                     startnode = self.mygraph.node_labeled(startnodelabel)
                     if startnode is None:
                         # this should not happen given how mention_graphnodes was created
@@ -192,6 +198,15 @@ class ConflictingEvidence:
                 pathlabel += nobj.direction + " " + node.shortlabel(nobj.role) + " " + str(node.get("type", shorten = True)) + " " + str(node.get("predicate", shorten = True)) + " | "
         return pathlabel
 
-
-
-
+    def get_all_conflicting_mention_pairs(self):
+        self.conflicting_mention_map = defaultdict(set)
+        for mention_1, mention_2 in combinations(
+                self.ldcanno_obj.mention_hypothesis.keys(), r=2):
+            if mention_1 not in self.ldcanno_obj.mention_graphnodes or \
+                    mention_2 not in self.ldcanno_obj.mention_graphnodes:
+                continue
+            hyprel1 = self.ldcanno_obj.mention_hypothesis[mention_1]
+            hyprel2 = self.ldcanno_obj.mention_hypothesis[mention_2]
+            if self._conflicting_evidence(hyprel1, hyprel2):
+                self.conflicting_mention_map[mention_1].add(mention_2)
+                self.conflicting_mention_map[mention_2].add(mention_1)

@@ -5,7 +5,7 @@ import json
 from argparse import ArgumentParser
 from pathlib import Path
 
-from sparql_helper import *
+from pipeline.sparql_helper import *
 
 parser = ArgumentParser()
 parser.add_argument('all_neighbors_path', help='path to all_neighbors.json')

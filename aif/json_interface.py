@@ -5,14 +5,7 @@
 # currently these are Statements that pertain to the same event mention
 
 
-import sys
-import os
-import rdflib
-import csv
 import json
-from first import first
-from AidaGraph import AidaGraph, AidaNode
-import AnnoExplore
 import logging
 from tqdm import tqdm
 
@@ -21,7 +14,7 @@ from tqdm import tqdm
 # Given an AidaGraph, transform it into input for WebPPL analysis:
 # * re-encode the graph,
 # * compute pairwise distances between statements
-class WpplInterface:
+class JsonInterface:
     #def __init__(self, mygraph, entrypoints, simplification_level = 0, maxdist = 5):
     def __init__(self, mygraph, simplification_level = 0, maxdist = 5):
         self.mygraph = mygraph

@@ -12,7 +12,6 @@
 
 from optparse import OptionParser
 import json
-import sys
 
 
 usage = "usage: %prog [options] arg"
@@ -35,16 +34,13 @@ if options.numsamples is not None:
 if options.numsamples is not None:
     json_obj["memberProb"] = options.baseprob
 
-    
 if options.shape is not None:
     json_obj["parameters"]["shape"] = options.shape
 
 if options.scale is not None:
     json_obj["parameters"]["scale"] = options.scale
 
-
-
 # and writing it back out again
 outf = open("aidaquery.json", "w")
-json.dump(json_obj, outf, indent = 1)
-outf.close
+json.dump(json_obj, outf, indent=1)
+outf.close()

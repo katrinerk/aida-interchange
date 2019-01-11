@@ -10,15 +10,8 @@
 # integrating LDC hypothesis annotation with the interface-format annotation
 
 import sys
-import os
-import rdflib
-import csv
-from first import first
-import pickle
-from AidaGraph import AidaGraph, AidaNode
-import AnnoExplore
-import Conflicting
 
+from legacy import AnnoExplore, Conflicting
 
 ## ## # ldcdir = "/Users/kee252/Documents/Projects/AIDA/data/LDC_scenario1_seedling/ldc_seedling_anno_v3/data/T101"
 ## ## # indir = "/Users/kee252/Documents/Projects/AIDA/data/LDC_scenario1_seedling/interchangeformat_2018-06-15/T101"
@@ -34,6 +27,9 @@ indir = sys.argv[1]
 mygraph = AnnoExplore.read_ldc_gaia_annotation(indir)
 
 print("number of nodes:", len(mygraph.node))
+print("number of entity nodes:", len(list(mygraph.nodes(targettype='Entity'))))
+print("number of event nodes:", len(list(mygraph.nodes(targettype='Event'))))
+print("number of relation nodes:", len(list(mygraph.nodes(targettype='Relation'))))
 
 # read in the LDC hypothesis info
 ldcdir = sys.argv[2]
@@ -43,7 +39,14 @@ if len(ldc_obj.mention_hypothesis) == 0:
     print("could not find hypothesis file")
     sys.exit(1)
 
+print("number of mentions with associated hypotheses:", len(ldc_obj.mention_hypothesis))
+print("number of mentions with associated graph nodes:", len(ldc_obj.mention_graphnodes))
+
 conflict_obj = Conflicting.ConflictingEvidence(mygraph, ldc_obj)
+
+conflict_obj.get_all_conflicting_mention_pairs()
+print('number of mentions with at least one conflict: ', len(conflict_obj.conflicting_mention_map))
+
 conflict_obj.detect_conflicting_paths()
 print("#entries:", len(conflict_obj.conflict_path))
 

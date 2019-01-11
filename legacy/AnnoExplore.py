@@ -1,13 +1,12 @@
 # Read human-readable info on LDC AIDA annotation
 # and integrate it with a GAIA graph.
 
-import sys
 import os
 import rdflib
 import csv
 from first import first
-import pickle
-from AidaGraph import AidaGraph, AidaNode
+from aif import AidaGraph
+
 
 ###############################################
 # class for integrating LDC annotation with

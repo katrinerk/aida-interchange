@@ -5,7 +5,8 @@ import json
 from argparse import ArgumentParser
 from operator import itemgetter
 from pathlib import Path
-from sparql_helper import *
+
+from pipeline.sparql_helper import *
 
 
 def queries_for_aida_result(
