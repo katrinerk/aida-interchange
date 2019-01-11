@@ -58,3 +58,27 @@ class EREUnify:
             retv[ere] = oldname_newname[ereu]
 
         return retv
+
+    # make an inverted version of self.unifier
+    # in which each representative unifier
+    # is mapped to the set of its cluster member names
+    def get_clusters(self):
+        retv = { }
+
+        for ere, ereu in self.unifier.items():
+            if ereu not in retv:
+                retv[ ereu ] = set()
+                
+            retv[ereu].add(ere)
+
+        return retv
+
+    # return a set of all cluster prototypes/
+    # representative unifiers
+    def get_prototypes(self):
+        return set(self.unifier.values())
+
+    # return a list of all cluster members
+    # recorded in self.unifier
+    def get_members(self):
+        return list(self.unifier.keys())
