@@ -3,6 +3,11 @@
 # call with a single .ttl file as its argument
 
 import sys
+
+from os.path import dirname, realpath
+src_path = dirname(dirname(realpath(__file__)))
+sys.path.insert(0, src_path)
+
 from itertools import combinations
 
 import rdflib

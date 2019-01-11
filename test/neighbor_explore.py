@@ -7,6 +7,10 @@
 
 import sys
 
+from os.path import dirname, realpath
+src_path = dirname(dirname(realpath(__file__)))
+sys.path.insert(0, src_path)
+
 import rdflib
 
 from aif import AidaGraph

@@ -1,5 +1,10 @@
 import rdflib
 import sys
+
+from os.path import dirname, realpath
+src_path = dirname(dirname(realpath(__file__)))
+sys.path.insert(0, src_path)
+
 from aif import AidaGraph
 
 input_path = sys.argv[1]
