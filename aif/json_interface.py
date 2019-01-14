@@ -79,13 +79,17 @@ class JsonInterface:
         # we write out statements, events, entities, relations
         for node in tqdm(self.mygraph.nodes()):
             # entities, events, relations: they  have a type. They also have a list of adjacent statements,
-            # and an index
+            # and an index. They have optional names.
             if node.is_entity():
                 retv[node.name] = {
                     "type": "Entity",
                     "adjacent": self._adjacent_statements(node),
                     "index": self.ere_counter}
 
+                enames = ",".join(set(self.mygraph.names_of_ere(node.name)))
+                if len(enames) > 0:
+                    retv[node.name]["name"] = enames
+                    
                 self.ere_counter += 1
                 self.json_obj["ere"].append(node.name)
                 
@@ -95,6 +99,10 @@ class JsonInterface:
                     "adjacent": self._adjacent_statements(node),
                     "index": self.ere_counter}
 
+                enames = ",".join(set(self.mygraph.names_of_ere(node.name)))
+                if len(enames) > 0:
+                    retv[node.name]["name"] = enames
+                    
                 self.ere_counter += 1
                 self.json_obj["ere"].append(node.name)
                 
@@ -103,6 +111,10 @@ class JsonInterface:
                     "type": "Relation",
                     "adjacent": self._adjacent_statements(node),
                     "index": self.ere_counter}
+
+                enames = ",".join(set(self.mygraph.names_of_ere(node.name)))
+                if len(enames) > 0:
+                    retv[node.name]["name"] = enames                
 
                 self.ere_counter += 1
                 self.json_obj["ere"].append(node.name)
