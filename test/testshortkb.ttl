@@ -1,0 +1,43 @@
+@prefix schema: <http://schema.org/> .
+@prefix ldcOnt: <https://tac.nist.gov/tracks/SM-KBP/2018/ontologies/SeedlingOntology#> .
+@prefix olia:  <http://purl.org/olia/system.owl#> .
+@prefix aidaDomainCommon: <https://tac.nist.gov/tracks/SM-KBP/2018/ontologies/AidaDomainOntologiesCommon#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix aida:  <https://tac.nist.gov/tracks/SM-KBP/2018/ontologies/InterchangeOntology#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ldc:   <https://tac.nist.gov/tracks/SM-KBP/2018/ontologies/LdcAnnotations#> .
+
+ldc:cluster-NIL3318.779987
+        a               aida:SameAsCluster ;
+        aida:prototype  ldc:NIL3318.779987 ;
+        aida:system     ldc:LDCModelGenerator .
+
+ldc:assertion-416  a      rdf:Statement ;
+        rdf:object        ldc:E781970.00543 ;
+        rdf:predicate     ldcOnt:Conflict.Attack_Instrument ;
+        rdf:subject       ldc:V781970.00152 ;
+        aida:confidence   [ a                     aida:Confidence ;
+                            aida:confidenceValue  "1.0"^^<http://www.w3.org/2001/XMLSchema#double> ;
+                            aida:system           ldc:LDCModelGenerator
+                          ] ;
+        aida:justifiedBy  [ a                        aida:TextJustification ;
+                            aida:confidence          [ a                     aida:Confidence ;
+                                                       aida:confidenceValue  "1.0"^^<http://www.w3.org/2001/XMLSchema#double> ;
+                                                       aida:system           ldc:LDCModelGenerator
+                                                     ] ;
+                            aida:endOffsetInclusive  "2259"^^<http://www.w3.org/2001/XMLSchema#int> ;
+                            aida:privateData         [ a                 aida:PrivateData ;
+                                                       aida:jsonContent  "{\"mention\":\"VM781970.000665\"}" ;
+                                                       aida:system       ldc:LDCModelGenerator
+                                                     ] ;
+                            aida:source              "HC000T6BM" ;
+                            aida:startOffset         "2255"^^<http://www.w3.org/2001/XMLSchema#int> ;
+                            aida:system              ldc:LDCModelGenerator
+                          ] ;
+        aida:privateData  [ a                 aida:PrivateData ;
+                            aida:jsonContent  "{\"provenance\":[\"HC000T6BM\"],\"hypothesis\":[\"T101_Q001_H001\",\"T101_Q003_H004\",\"T101_Q003_H003\",\"T101_Q002_H002\",\"T101_Q002_H001\"],\"partial\":[\"T101_Q001_H001\",\"T101_Q003_H001\",\"T101_Q002_H002\",\"T101_Q002_H001\"],\"contradicts\":[\"T101_Q002_H004\",\"T101_Q002_H003\",\"T101_Q003_H002\",\"T101_Q001_H002\",\"T101_Q001_H003\"]}" ;
+                            aida:system       ldc:LDCModelGenerator
+                          ] ;
+        aida:system       ldc:LDCModelGenerator .
+
