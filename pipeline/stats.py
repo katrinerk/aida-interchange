@@ -14,12 +14,44 @@ from aif import AidaGraph
 
 
 def get_stats(graph):
+    numstatements = len(list(graph.nodes('Statement')))
+
+    if numstatements > 0:
+        perctypestatements= (len(list(g for g in graph.nodes('Statement') if g.has_predicate("type", shorten = True))) / numstatements)
+    else:
+        perctypestatements = 0
+        
+    numentities = len(list(graph.nodes('Entity')))
+
+    if numentities > 0:
+        # a singleton entity is one that only has type statements
+        # and no other statements or relations attached
+        singleton_entities = [ ]
+        for node in graph.nodes('Entity'):
+            
+            singleton = True
+            
+            for pred, subjlabels in node.inedge.items():
+                for subjlabel in subjlabels:
+                    subjnode = graph.get_node(subjlabel)
+                    if subjnode and (subjnode.is_relation() or (subjnode.is_statement() and not subjnode.is_type_statement())):
+                        singleton = False
+            if singleton:
+                singleton_entities.append(node)
+
+        percsingleton = len(singleton_entities) / numentities
+    else:
+        percsingleton = 0
+
+    
     return {
         '# Nodes': len(list(graph.nodes())),
-        '# Entities': len(list(graph.nodes('Entity'))),
+        '# Entities': numentities,
+        '% Singleton Entities': percsingleton, 
         '# Relations': len(list(graph.nodes('Relation'))),
         '# Events': len(list(graph.nodes('Event'))),
-        '# Statements': len(list(graph.nodes('Statement'))),
+        '# Statements': numstatements,
+        '% Type Statements': perctypestatements,
         '# SameAsClusters': len(list(graph.nodes('SameAsCluster'))),
         '# ClusterMemberships': len(list(graph.nodes('ClusterMembership')))
     }
