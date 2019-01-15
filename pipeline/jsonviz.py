@@ -1,5 +1,8 @@
 # Katrin Erk January 2019
 # given a json AIDA file, visualize the graph
+#
+# usage:
+# python3 jsonviz.ph <AIDAgraph.json> [<output file prefix>]
 
 
 import sys
@@ -9,10 +12,6 @@ import os
 import graphviz
 
 
-from os.path import dirname, realpath
-src_path = dirname(dirname(dirname(realpath(__file__))))
-sys.path.insert(0, src_path)
-
 ####
 def nodeshortlabel(label):
     return label.split("/")[-1]
@@ -20,6 +19,11 @@ def nodeshortlabel(label):
 
 # read json file
 json_filename = sys.argv[1]
+
+if len(sys.argv) > 2:
+    graph_filename = sys.argv[2]
+else:
+    graph_filename = None
 
 
 with open(json_filename, 'r') as fin:
@@ -52,5 +56,9 @@ for nodelabel, node in json_obj["theGraph"].items():
     if node["type"] == "Statement" and node["object"] in json_obj["theGraph"]:
         dot.edge(nodeshortlabel(nodelabel), nodeshortlabel(node["object"]), label = "object")
 
-dot.render(view=True)
+if graph_filename:
+    dot.render(graph_filename, view=True)
+else:
+    dot.render(view=True)
+
 
