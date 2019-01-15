@@ -162,8 +162,7 @@ class JsonInterface:
                 # source document ids
                 sources = set(self.mygraph.sources_associated_with(node.name))
                 if len(sources) > 0:
-                    assert len(sources) == 1, '{}, {}'.format(sources, node.name)
-                    retv[node.name]["source"] = sources.pop()
+                    retv[node.name]["source"] = list(sources)
 
                 # hypotheses
                 hypotheses = set(self.mygraph.hypotheses_supported(node.name))

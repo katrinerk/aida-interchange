@@ -128,6 +128,9 @@ for oldname, newname in ereunif.items():
 json_out["theGraph"] = { }
 erecounter = 0
 
+# each new ERE (cluster of old EREs): make new index,
+# assume that all cluster members have the same type.
+# form union of content from cluster members
 for newname, oldnames in json_log["ereName"].items():
     # write new ERE entry
     json_out["theGraph"][newname] = {
@@ -139,7 +142,7 @@ for newname, oldnames in json_log["ereName"].items():
     additional_info = { }
     for oldname in oldnames:
         for entry, content in json_in["theGraph"][oldname].items():
-            if entry == "type" or entry == "index":
+            if entry == "type" or entry == "index" or entry == "adjacent":
                 continue
             if entry not in additional_info:
                 additional_info[ entry ] = set()
@@ -150,7 +153,11 @@ for newname, oldnames in json_log["ereName"].items():
         
     erecounter += 1
 
-
+# Now that EREs have been compressed into ERE coref groups,
+# multiple old statements may collapse into a single new statement.
+# We can collapse two statements if they have the same predicate,
+# their subjects belong to the same ERE group, and
+# their objects belong to the same ERE group
     
 # keep a dictionary mapping (subject, predicate, object) triples to new statement names
 oldstmt_newstmt = { }
@@ -161,6 +168,7 @@ json_log["stmtName"] = { }
 for label, content in json_in["theGraph"].items():
     if content["type"] == "Statement":
         stmt_key = make_stmt_key(content, ereunif)
+        
         if stmt_key in oldstmt_newstmt:
             # we have already created this statement
             newstmt = oldstmt_newstmt[ stmt_key ]
@@ -168,7 +176,7 @@ for label, content in json_in["theGraph"].items():
             # we need to create this statement name
             newstmt = "Stmt" + str(stmtcounter)
             oldstmt_newstmt[ stmt_key ] = newstmt
-            stmtcounter += 1
+            stmtcounter += 1            
 
         if newstmt not in json_log["stmtName"]:
             json_log["stmtName"][newstmt] = [ ]
@@ -187,6 +195,24 @@ for newname, oldnames  in json_log["stmtName"].items():
         "predicate" : content["predicate"], 
         "object" : obj
         }
+
+    # source
+    sources = set()
+    for oldname in oldnames:
+        if "source" in json_in["theGraph"][oldname]:
+            sources.update(json_in["theGraph"][oldname]["source"])
+    if len(sources)> 0:
+        json_out["theGraph"][newname]["source"] = list(sources)
+
+    # hypotheses
+    for label in ["hypotheses_supported", "hypotheses_partially_supported", "hypotheses_contradicted"]:
+        hypotheses = set()
+        for oldname in oldnames:
+            if label in json_in["theGraph"][oldname]:
+                hypotheses.update(json_in["theGraph"][oldname][label])
+        if len(hypotheses) > 0:
+            json_out["theGraph"][newname][label] = list(hypotheses)
+        
             
     stmtcounter += 1
 
