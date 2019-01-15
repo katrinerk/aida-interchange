@@ -14,16 +14,16 @@ from aif import AidaGraph
 
 
 def get_stats(graph):
-    numstatements = len(list(graph.nodes('Statement')))
+    num_statements = len(list(graph.nodes('Statement')))
 
-    if numstatements > 0:
-        perctypestatements= (len(list(g for g in graph.nodes('Statement') if g.has_predicate("type", shorten = True))) / numstatements)
+    if num_statements > 0:
+        perc_type_statements= (len(list(g for g in graph.nodes('Statement') if g.has_predicate("type", shorten = True))) / num_statements) * 100
     else:
-        perctypestatements = 0
-        
-    numentities = len(list(graph.nodes('Entity')))
+        perc_type_statements = 0
 
-    if numentities > 0:
+    num_entities = len(list(graph.nodes('Entity')))
+
+    if num_entities > 0:
         # a singleton entity is one that only has type statements
         # and no other statements or relations attached
         singleton_entities = [ ]
@@ -32,26 +32,54 @@ def get_stats(graph):
             singleton = True
             
             for pred, subjlabels in node.inedge.items():
+                if not singleton:
+                    break
                 for subjlabel in subjlabels:
                     subjnode = graph.get_node(subjlabel)
                     if subjnode and (subjnode.is_relation() or (subjnode.is_statement() and not subjnode.is_type_statement())):
                         singleton = False
+                        break
             if singleton:
                 singleton_entities.append(node)
 
-        percsingleton = len(singleton_entities) / numentities
+        perc_singleton_entities = len(singleton_entities) / num_entities * 100
     else:
-        percsingleton = 0
+        perc_singleton_entities = 0
 
-    
+    num_events = len(list(graph.nodes('Event')))
+
+    if num_events > 0:
+        # a singleton entity is one that only has type statements
+        # and no other statements or relations attached
+        singleton_events = []
+        for node in graph.nodes('Event'):
+
+            singleton = True
+
+            for pred, subjlabels in node.inedge.items():
+                if not singleton:
+                    break
+                for subjlabel in subjlabels:
+                    subjnode = graph.get_node(subjlabel)
+                    if subjnode and (subjnode.is_relation() or (subjnode.is_statement() and not subjnode.is_type_statement())):
+                        singleton = False
+                        break
+            if singleton:
+                singleton_events.append(node)
+
+        perc_singleton_events = len(singleton_events) / num_events * 100
+    else:
+        perc_singleton_events = 0
+
     return {
         '# Nodes': len(list(graph.nodes())),
-        '# Entities': numentities,
-        '% Singleton Entities': percsingleton, 
+        '# Entities': num_entities,
+        '% Singleton Entities': perc_singleton_entities,
         '# Relations': len(list(graph.nodes('Relation'))),
-        '# Events': len(list(graph.nodes('Event'))),
-        '# Statements': numstatements,
-        '% Type Statements': perctypestatements,
+        '# Events': num_events,
+        '% Singleton Events': perc_singleton_events,
+        '# Statements': num_statements,
+        '% Type Statements': perc_type_statements,
         '# SameAsClusters': len(list(graph.nodes('SameAsCluster'))),
         '# ClusterMemberships': len(list(graph.nodes('ClusterMembership')))
     }
@@ -106,7 +134,7 @@ def directory_stats(input_dir, suffix=None, filename_list=None):
 
     print('Printing statistics...')
     for key, val in stats_list.items():
-        print('{}: mean = {:.2f}, min = {}, max = {}'.format(
+        print('{}: mean = {:.2f}, min = {:.2f}, max = {:.2f}'.format(
             key, sum(val) / len(val), min(val), max(val)))
 
 
