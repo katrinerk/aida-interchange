@@ -98,9 +98,14 @@ def print_statement_info(stmtlabel, json_obj, fout):
         else:
             print(label, ":", shorten_label(node[label]), file = fout)
     print("\n", file = fout)
-        
-        
 
+####
+def each_statement_mentioning_hypothesis(hypothesis, hyprelation, json_obj):
+    for label, node in json_obj["theGraph"].items():
+        if node["type"] == "Statement" and hypothesis in node.get(hyprelation, []):
+            yield label
+        
+#######################
 ###
 # Input is a json file that encodes the contents of an AIF file
 jsonfilename = sys.argv[1]
@@ -128,16 +133,31 @@ for hypothesis in hypotheses:
         print("==== Hypothesis", hypothesis, "============", file = fout)
         print("=======================================", file = fout)
 
-        for hyptype, hyplabel in [["Supporting statements", "hypotheses_supported"], \
-                                      ["Partially supporting statements", "hypotheses_partially_supported"], \
-                                      ["Contradicting statements", "hypotheses_contradicted"]]:
+        # determine supporting, partially supporting, contradicting statements for this hypothesis
+        hyp_supporting = set(each_statement_mentioning_hypothesis(hypothesis, "hypotheses_supported", json_obj))
+        hyp_partially_supporting = set(each_statement_mentioning_hypothesis(hypothesis, "hypotheses_partially_supported", json_obj))
+        hyp_contradicting = set(each_statement_mentioning_hypothesis(hypothesis, "hypotheses_contradicted", json_obj))
+
+        # handle statements that appear in multiple sets
+        # if stmts are both supporting and partially supporting, keep only the stronger category
+        hyp_partially_supporting.difference_update(hyp_contradicting)
+        # keep separate statements that appear in both contradicting and (partially) supporting
+        hyp_multi = (hyp_supporting.union(hyp_partially_supporting)).intersection(hyp_contradicting)
+        hyp_supporting.difference_update(hyp_multi)
+        hyp_partially_supporting.difference_update(hyp_multi)
+        hyp_contradicting.difference_update(hyp_multi)
+        
+
+        for hyptype, hypset in [["Supporting statements", hyp_supporting], \
+                                      ["Partially supporting statements", hyp_partially_supporting], \
+                                      ["Contradicting statements", hyp_contradicting], \
+                                    ["Statements listed as both supporting and contradicting", hyp_multi]]:
 
             print("---------------------------------------", file = fout)
             print("----", hyptype, "------------", file = fout)
             print("---------------------------------------", file = fout)
 
-            for label, node in json_obj["theGraph"].items():
-                if node["type"] == "Statement" and hypothesis in node.get(hyplabel, []):
-                    print_statement_info(label, json_obj, fout)
+            for label in hypset:
+                print_statement_info(label, json_obj, fout)
 
 
