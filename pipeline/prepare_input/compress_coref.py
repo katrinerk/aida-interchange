@@ -19,7 +19,7 @@ import random
 from argparse import ArgumentParser
 
 from os.path import dirname, realpath
-src_path = dirname(dirname(realpath(__file__)))
+src_path = dirname(dirname(dirname(realpath(__file__))))
 sys.path.insert(0, src_path)
 
 from  aif import EREUnify
@@ -129,13 +129,25 @@ json_out["theGraph"] = { }
 erecounter = 0
 
 for newname, oldnames in json_log["ereName"].items():
-    # write new ERE entry,
-    # leaving out "adjacent" for now
+    # write new ERE entry
     json_out["theGraph"][newname] = {
         "type" : json_in["theGraph"][oldnames[0]]["type"], 
-        "adjacent" : [ ],
         "index" : erecounter
         }
+    # add additional info from old members of this ERE.
+    # all the additional entries have list values.
+    additional_info = { }
+    for oldname in oldnames:
+        for entry, content in json_in["theGraph"][oldname].items():
+            if entry == "type" or entry == "index":
+                continue
+            if entry not in additional_info:
+                additional_info[ entry ] = set()
+            additional_info[entry].update(content)
+
+    for entry, content in additional_info.items():
+        json_out["theGraph"][newname][entry] = list(content)
+        
     erecounter += 1
 
 

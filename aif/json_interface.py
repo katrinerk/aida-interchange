@@ -80,42 +80,22 @@ class JsonInterface:
         for node in tqdm(self.mygraph.nodes()):
             # entities, events, relations: they  have a type. They also have a list of adjacent statements,
             # and an index. They have optional names.
-            if node.is_entity():
+            if node.is_ere():
                 retv[node.name] = {
-                    "type": "Entity",
                     "adjacent": self._adjacent_statements(node),
                     "index": self.ere_counter}
 
-                enames = ",".join(set(self.mygraph.names_of_ere(node.name)))
+                if node.is_event():
+                    retv[node.name]["type"] = "Event"
+                elif node.is_entity():
+                    retv[node.name]["type"] = "Entity"
+                else:
+                    retv[node.name]["type"] = "Relation"
+
+                enames = list(set(self.mygraph.names_of_ere(node.name)))
                 if len(enames) > 0:
                     retv[node.name]["name"] = enames
                     
-                self.ere_counter += 1
-                self.json_obj["ere"].append(node.name)
-                
-            elif node.is_event():
-                retv[node.name] = {
-                    "type": "Event",
-                    "adjacent": self._adjacent_statements(node),
-                    "index": self.ere_counter}
-
-                enames = ",".join(set(self.mygraph.names_of_ere(node.name)))
-                if len(enames) > 0:
-                    retv[node.name]["name"] = enames
-                    
-                self.ere_counter += 1
-                self.json_obj["ere"].append(node.name)
-                
-            elif node.is_relation():
-                retv[node.name] = {
-                    "type": "Relation",
-                    "adjacent": self._adjacent_statements(node),
-                    "index": self.ere_counter}
-
-                enames = ",".join(set(self.mygraph.names_of_ere(node.name)))
-                if len(enames) > 0:
-                    retv[node.name]["name"] = enames                
-
                 self.ere_counter += 1
                 self.json_obj["ere"].append(node.name)
                 
@@ -156,7 +136,8 @@ class JsonInterface:
                     del retv[node.name]
                   
                     
-            # statements have a single subj, pred, obj, a maximal confidence level, and possibly mentions
+            # statements have a single subj, pred, obj, a maximal confidence level, and possibly mentions.
+            # they also have hypotheses that they support, partially support, and contradict
             elif node.is_statement():
                 # type
                 retv[node.name] = {
@@ -183,6 +164,17 @@ class JsonInterface:
                 if len(sources) > 0:
                     assert len(sources) == 1, '{}, {}'.format(sources, node.name)
                     retv[node.name]["source"] = sources.pop()
+
+                # hypotheses
+                hypotheses = set(self.mygraph.hypotheses_supported(node.name))
+                if len(hypotheses) > 0:
+                    retv[node.name]["hypotheses_supported"] = list(hypotheses)
+                hypotheses = set(self.mygraph.hypotheses_partially_supported(node.name))
+                if len(hypotheses) > 0:
+                    retv[node.name]["hypotheses_partially_supported"] = list(hypotheses)
+                hypotheses = set(self.mygraph.hypotheses_contradicted(node.name))
+                if len(hypotheses) > 0:
+                    retv[node.name]["hypotheses_contradicted"] = list(hypotheses)
 
                 # well-formedness check
                 if all(label in retv[node.name] for label in ["conf", "predicate", "subject", "object"]):
