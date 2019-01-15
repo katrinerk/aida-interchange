@@ -134,9 +134,17 @@ erecounter = 0
 for newname, oldnames in json_log["ereName"].items():
     # write new ERE entry
     json_out["theGraph"][newname] = {
-        "type" : json_in["theGraph"][oldnames[0]]["type"], 
         "index" : erecounter
         }
+    # type info
+    types = set(json_in["theGraph"][n]["type"] for n in oldnames)
+    if len(types) > 1:
+        types.remove("Entity")
+    if len(types) > 1:
+        print("error: multiple types", oldnames, types, file = sys.stderr)
+        
+    json_out["theGraph"][newname]["type"] = types.pop()
+    
     # add additional info from old members of this ERE.
     # all the additional entries have list values.
     additional_info = { }
