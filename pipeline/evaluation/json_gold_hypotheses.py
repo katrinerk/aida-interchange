@@ -18,11 +18,14 @@ import json_prettyprint
 ###################################
 
 ####
+# Given a hypothesis, yield all statements that stand in the given relation
+# (hypotheses_supported, hypotheses_partially_supported, hypotheses_contradicted)
+# to this hypothesis
 def each_statement_mentioning_hypothesis(hypothesis, hyprelation, json_obj):
     for label, node in json_obj["theGraph"].items():
         if node["type"] == "Statement" and hypothesis in node.get(hyprelation, []):
             yield label
-        
+            
 #######################
 ###
 # Input is a json file that encodes the contents of an AIF file
@@ -75,7 +78,7 @@ for hypothesis in hypotheses:
             print("----", hyptype, "------------", file = fout)
             print("---------------------------------------", file = fout)
 
-            for label in hypset:
+            for label in json_prettyprint.sorted_statements_for_output(hypset, json_obj):
                 json_prettyprint.print_statement_info(label, json_obj, fout)
 
 

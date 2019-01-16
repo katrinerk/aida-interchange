@@ -96,3 +96,34 @@ def print_statement_info(stmtlabel, json_obj, fout):
             print(label, ":", shorten_label(node[label]), file = fout)
     print("\n", file = fout)
 
+####
+# Given a set of statement labels, sort the labels for more human-friendly output:
+# group all statements that refer to the same event
+def sorted_statements_for_output(stmtset, json_obj):
+    # map from event labels to statement that mention them
+    event_stmt = { }
+    for stmtlabel in stmtset:
+        node = json_obj["theGraph"].get(stmtlabel, None)
+        if node is None: continue
+        for rel in ["subject", "object"]:
+            if node[rel] in json_obj["theGraph"] and json_obj["theGraph"][node[rel]].get("type", None) == "Event":
+                if node[rel] not in event_stmt:
+                    event_stmt[ node[rel]] = set()
+                event_stmt[ node[rel] ].add(stmtlabel)
+
+    # put statements in output list in order of events that mention them
+    stmts_done = set()
+    retv = [ ]
+    for stmts in event_stmt.values():
+        for stmt in stmts:
+            if stmt not in stmts_done:
+                stmts_done.add(stmt)
+                retv.append(stmt)
+                
+    # and statements that don't mention events
+    for stmt in stmtset:
+        if stmt not in stmts_done:
+            stmts_done.add(stmt)
+            retv.append(stmt)
+
+    return retv
