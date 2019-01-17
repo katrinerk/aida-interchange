@@ -11,6 +11,42 @@ class AidaJson:
         self.thegraph = json_obj["theGraph"]
 
     ###############################
+
+    ###
+    # iterate over Entities, Events, Relations, EREs, Statements in the graph
+    def each_ere(self):
+        for nodelabel, node in self.thegraph.items():
+            if node["type"] in ["Entity", "Event", "Relation"]:
+                yield (nodelabel, node)
+
+    def each_entity(self):
+        for nodelabel, node in self.thegraph.items():
+            if node["type"] == "Entity":
+                yield (nodelabel, node)
+
+    def each_event(self):
+        for nodelabel, node in self.thegraph.items():
+            if node["type"] == "Event":
+                yield (nodelabel, node)
+
+    def each_relation(self):
+        for nodelabel, node in self.thegraph.items():
+            if node["type"] == "Relation":
+                yield (nodelabel, node)
+
+    def each_statement(self):
+        for nodelabel, node in self.thegraph.items():
+            if node["type"] == "Statement":
+                yield (nodelabel, node)
+
+    # is this node an Entity/Event/Relation/Statement
+    def is_nodetype(self, nodelabel, nodetype):
+        return (nodelabel in self.thegraph and self.thegraph[nodelabel]["type"] == nodetype)
+
+    def is_ere(self, nodelabel):
+        return (self.is_nodetype(nodelabel, "Entity") or self.is_nodetype(nodelabel, "Event") or self.is_nodetype(nodelabel, "Relation"))
+                
+                
     ###
     # given an ERE label, return labels of all adjacent statements
     # with the given predicate and where erelabel is an argument in the given ererole (subject, object)
@@ -41,20 +77,18 @@ class AidaJson:
             retv["typestmt"] = ", ".join(set(self._shorten_label(self.thegraph[stmtlabel]["object"]) \
                                             for stmtlabel in self.each_ere_adjacent_stmt(erelabel, "type", "subject")))
 
-            names = set()
-            for stmtlabel in self.each_ere_adjacent_stmt(erelabel, "type", "subject"):
-                names.update(self._english_names(self.thegraph[erelabel].get("name", [])))
-
-            retv["name"] = ", ".join(names)
+            retv["name"] = ", ".join(self._english_names(self.thegraph[erelabel].get("name", [])))
 
             affiliations = set() 
             for affiliatestmtlabel in self.each_ere_adjacent_stmt(erelabel, "GeneralAffiliation.APORA_Affiliate", "object"):
                 relationlabel = self.thegraph[affiliatestmtlabel]["subject"]
                 for affiliationstmtlabel in self.each_ere_adjacent_stmt(relationlabel, "GeneralAffiliation.APORA_Affiliation", "subject"):
                     affiliationlabel = self.thegraph[affiliationstmtlabel]["object"]
-                    affiliations.update(self._english_names(self.thegraph[affiliationlabel].get("name", [ ])))
+                    if "name" in self.thegraph[affiliationlabel]:
+                        affiliations.add(self.thegraph[affiliationlabel]["name"])
+                                             
 
-            retv["affiliation"] = ", ".join(affiliations)
+            retv["affiliation"] = ", ".join(self._english_names(affiliations))
 
         return retv
 
