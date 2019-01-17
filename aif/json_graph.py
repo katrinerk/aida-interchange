@@ -4,6 +4,8 @@
 
 import json
 import re
+import graphviz
+
 
 class AidaJson:
     def __init__(self, json_obj):
@@ -60,6 +62,7 @@ class AidaJson:
               self.thegraph[stmtlabel]["predicate"] == predicate:
                 yield stmtlabel
 
+    ######################################
 
     ###
     # return a dictionary that characterizes the given ERE in terms of:
@@ -85,7 +88,7 @@ class AidaJson:
                 for affiliationstmtlabel in self.each_ere_adjacent_stmt(relationlabel, "GeneralAffiliation.APORA_Affiliation", "subject"):
                     affiliationlabel = self.thegraph[affiliationstmtlabel]["object"]
                     if "name" in self.thegraph[affiliationlabel]:
-                        affiliations.add(self.thegraph[affiliationlabel]["name"])
+                        affiliations.update(self.thegraph[affiliationlabel]["name"])
                                              
 
             retv["affiliation"] = ", ".join(self._english_names(affiliations))
@@ -155,6 +158,77 @@ class AidaJson:
         return retv
 
 
+    ################################
+    # do visualization with graphviz
+    def graphviz(self, stmt = None, outfilename = None, showview = False, unary_stmt = False):
+
+        ##
+        # restrict the statements to include in the visualization?
+        # if so, make a list of EREs to include in the visualization
+        if stmt is not None:
+            ere_to_include = set()
+            for nodelabel, node in self.each_statement():
+                if nodelabel in stmt:
+                    for argument in ["subject", "object"]:
+                        if self.is_ere(node[argument]):
+                            ere_to_include.add(node[argument])
+
+        ##
+        # now visualize
+        dot = graphviz.Digraph(comment = "AIDA graph", engine = "circo")
+
+        # color scheme
+        colorscheme = {
+            "Entity" : "beige",
+            "Event" : "lightblue",
+            "Relation": "lightgrey"
+        }
+
+        # make all the ERE nodes
+        for nodelabel, node in self.each_ere():
+            # are we only visualizing part of the graph?
+            if stmt is not None and nodelabel not in ere_to_include:
+                # skip this ere
+                continue
+
+            characterization = self.ere_characterization(nodelabel)
+            erecolor = colorscheme[ node["type"]]
+
+            nodecontent = ""
+            if "typestmt" in characterization and characterization["typestmt"] != "":
+                nodecontent += "type:" + characterization["typestmt"] + "\n"
+
+            if "name" in characterization and characterization["name"] != "":
+                nodecontent += characterization["name"]
+        
+            dot.node(self._shorten_label(nodelabel),  nodecontent, color=erecolor, style = "filled")
+
+
+        # make statements into connections
+        for nodelabel, node in self.each_statement():
+            # are we only visualizing part of the graph
+            if stmt is not None and nodelabel not in stmt:
+                continue
+            
+            # statements that connects two EREs
+            if self.is_ere(node["subject"]) and self.is_ere(node["object"]):
+                dot.edge(self._shorten_label(node["subject"]), self._shorten_label(node["object"]), label = node["predicate"])
+
+            else:
+                if unary_stmt:
+                    # include unary statements too
+                    if self.is_ere(node["subject"]):
+                        dot.edge(self._shorten_label(node["subject"]), self._shorten_label(node["subject"]), \
+                                     label = self._shorten_label(node["object"]))
+        
+
+        if outfilename is not None:
+            dot.render(outfilename, view=showview)
+        else:
+            dot.render(view=showview)
+
+        return dot
+    
     ###############################
 
     ###
@@ -165,5 +239,6 @@ class AidaJson:
     ###
     # given a label, shorten it for easier reading
     def _shorten_label(self, label):
-        return label.split("/")[-1]
+        return label.split("/")[-1].split("#")[-1]
 
+    

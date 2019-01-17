@@ -6,7 +6,7 @@
 #   and show elements that are contradicting or superfluous
 #
 # usage:
-# python3 eval_hypotheses.py <generated hypotheses.json> <thegraph.json> <outfilename> [--prefix <relevant hypothesis prefix>]
+# python3 eval_hypotheses.py <generated hypotheses.json> <thegraph.json> <outdir> [--prefix <relevant hypothesis prefix>]
 #
 # Output is written to stdout.
 
@@ -28,7 +28,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('hypo_json', help='path to the json file containing system-generated hypotheses')
 parser.add_argument('thegraph_json', 
                     help='path to a json file containing the AIDA graph, including gold hypotheses')
-parser.add_argument('outfilename', help='path to output file in which to write detailed human-readable eval')
+parser.add_argument('outdir', help='path to dictionary in which to write detailed human-readable eval')
 parser.add_argument('--prefix', '-p',
                     help='string prefix of gold hypothesis names to consider'
                          'default to empty (use all hypotheses)')
@@ -38,9 +38,7 @@ args = parser.parse_args()
 ###
 # read the graph and the model-generated hypotheses
 with open(args.thegraph_json, 'r') as fin:
-    json_obj = json.load(fin)
-
-mygraph_obj = AidaJson(json_obj)
+    json_obj = AidaJson(json.load(fin))
 
 with open(args.hypo_json, 'r') as fin:
     hypo_obj = json.load(fin)
@@ -48,7 +46,7 @@ with open(args.hypo_json, 'r') as fin:
 ###
 # for each gold hypothesis, determine supporting, partially supporting, contradicting statements
 goldhypothesis = { }
-for stmtlabel, node in json_obj["theGraph"].items():
+for stmtlabel, node in json_obj.each_statement():
     for hyptype in ["hypotheses_supported", "hypotheses_partially_supported", "hypotheses_contradicted"]:
         for hyplabel in node.get(hyptype, [ ]):
             # do we have a hypothesis name prefix?
@@ -101,31 +99,36 @@ strict_reclist = [ ]
 lenient_preclist = [ ]
 lenient_reclist = [ ]
 
-with open(args.outfilename, "w") as fout:
-    for modelhypo_index, modelhypo in enumerate(hypo_obj["support"]):
-        modelhypo_prob = hypo_obj["probs"][modelhypo_index]
-        goldhypo = modelhypo_goldhypo[ modelhypo_index ]
-        
-        # strict precision and recall
-        truepos = len(goldhypothesis[goldhypo].get("hypotheses_supported", set()).intersection(modelhypo["statements"]))
-        strict_prec = truepos / len(modelhypo["statements"])
-        strict_rec = truepos / len(goldhypothesis[goldhypo].get("hypotheses_supported", set()))
-        strict_preclist.append(strict_prec)
-        strict_reclist.append(strict_rec)
-
-        # lenient precision and recall
-        truepos = len((goldhypothesis[goldhypo].get("hypotheses_supported", set()).union(goldhypothesis[goldhypo].get("hypotheses_partially_supported", set()))).intersection(modelhypo["statements"]))
-        lenient_prec = truepos / len(modelhypo["statements"])
-        lenient_rec = truepos / len(goldhypothesis[goldhypo].get("hypotheses_supported", set()).union(goldhypothesis[goldhypo].get("hypotheses_partially_supported", set())))
-        lenient_preclist.append(strict_prec)
-        lenient_reclist.append(strict_rec)
+for modelhypo_index, modelhypo in enumerate(hypo_obj["support"]):
     
-        # short output to stdout
-        print("Model hypothesis", modelhypo_index, "p=", round(modelhypo_prob, 2), ", matched to gold", goldhypo, file = sys.stderr)
-        print("Strict Prec:", round(strict_prec, 3), "Rec:", round(strict_rec, 3), file = sys.stderr)
-        print("Lenient Prec:", round(lenient_prec, 3), "Rec:", round(lenient_rec, 3), "\n", file = sys.stderr)
+    modelhypo_prob = hypo_obj["probs"][modelhypo_index]
+    goldhypo = modelhypo_goldhypo[ modelhypo_index ]
+    goldhypo_supported = goldhypothesis[goldhypo].get("hypotheses_supported", set())
+    lenient_goldhypo_supported = goldhypo_supported.union(goldhypothesis[goldhypo].get("hypotheses_partially_supported", set()))
 
-        # longer output to file
+
+    # strict precision and recall
+    truepos = len(goldhypo_supported.intersection(modelhypo["statements"]))
+    strict_prec = truepos / len(modelhypo["statements"])
+    strict_rec = truepos / len(goldhypo_supported)
+    strict_preclist.append(strict_prec)
+    strict_reclist.append(strict_rec)
+
+    # lenient precision and recall
+    truepos = len(lenient_goldhypo_supported.intersection(modelhypo["statements"]))
+    lenient_prec = truepos / len(modelhypo["statements"])
+    lenient_rec = truepos / len(lenient_goldhypo_supported)
+    lenient_preclist.append(strict_prec)
+    lenient_reclist.append(strict_rec)
+
+    # short output to stdout
+    print("Model hypothesis", modelhypo_index, "p=", round(modelhypo_prob, 2), ", matched to gold", goldhypo, file = sys.stderr)
+    print("Strict Prec:", round(strict_prec, 3), "Rec:", round(strict_rec, 3), file = sys.stderr)
+    print("Lenient Prec:", round(lenient_prec, 3), "Rec:", round(lenient_rec, 3), "\n", file = sys.stderr)
+
+    # longer output to file
+    outfilebase = args.outdir + "/hypo" + str(modelhypo_index)
+    with open(outfilebase + ".txt", "w") as fout:
         print("====================================", file = fout)
         print("Model hypothesis", modelhypo_index, "p=", round(modelhypo_prob, 2), ", matched to gold", goldhypo, file = fout)
         print("------------------------------------", file = fout)
@@ -135,24 +138,27 @@ with open(args.outfilename, "w") as fout:
 
         print("------------------------------------", file = fout)        
         print("Model hypothesis details:\n", file = fout)
-        
-        for stmtlabel in mygraph_obj.sorted_statements_for_output(modelhypo["statements"]):
-            mygraph_obj.print_statement_info(stmtlabel, fout)
+
+        for stmtlabel in json_obj.sorted_statements_for_output(modelhypo["statements"]):
+            json_obj.print_statement_info(stmtlabel, fout)
         print("\n", file = fout)
 
         print("------------------------------------", file = fout)
         print("Superfluous statements wrt.strict gold hypothesis membership:\n", file = fout)
 
-        for stmtlabel in mygraph_obj.sorted_statements_for_output(set(modelhypo["statements"]).difference(goldhypothesis[goldhypo]["hypotheses_supported"])):
-            mygraph_obj.print_statement_info(stmtlabel, fout)
+        for stmtlabel in json_obj.sorted_statements_for_output(set(modelhypo["statements"]).difference(goldhypo_supported)):
+            json_obj.print_statement_info(stmtlabel, fout)
         print("\n", file = fout)            
 
         print("------------------------------------\n", file = fout)
         print("Missing statements from gold hypothesis (strict membership):\n", file = fout)
-        
-        for stmtlabel in mygraph_obj.sorted_statements_for_output(goldhypothesis[goldhypo]["hypotheses_supported"].difference(modelhypo["statements"])):
-            mygraph_obj.print_statement_info(stmtlabel, fout)
+
+        for stmtlabel in json_obj.sorted_statements_for_output(goldhypo_supported.difference(modelhypo["statements"])):
+            json_obj.print_statement_info(stmtlabel, fout)
         print("\n", file = fout)
+
+    # graphical output of the hypothesis
+    json_obj.graphviz(outfilename = outfilebase + ".viz", showview = False, stmt = modelhypo["statements"], unary_stmt=True)
 
 
         
