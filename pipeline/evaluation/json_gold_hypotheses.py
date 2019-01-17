@@ -13,7 +13,12 @@ import sys
 import json
 import re
 
-import json_prettyprint
+
+from os.path import dirname, realpath
+src_path = dirname(dirname(dirname(realpath(__file__))))
+sys.path.insert(0, src_path)
+
+from  aif import AidaJson
 
 ###################################
 
@@ -37,6 +42,8 @@ outdir = sys.argv[2]
 with open(jsonfilename, 'r') as fin:
     json_obj = json.load(fin)
 
+mygraph_obj = AidaJson(json_obj)
+    
 ###
 # make a list of all hypotheses
 hypotheses = set()
@@ -78,7 +85,7 @@ for hypothesis in hypotheses:
             print("----", hyptype, "------------", file = fout)
             print("---------------------------------------", file = fout)
 
-            for label in json_prettyprint.sorted_statements_for_output(hypset, json_obj):
-                json_prettyprint.print_statement_info(label, json_obj, fout)
+            for label in mygraph_obj.sorted_statements_for_output(hypset):
+                mygraph_obj.print_statement_info(label, fout)
 
 
