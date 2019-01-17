@@ -31,7 +31,7 @@ class AidaJson:
     # - names ("name")
     # - type statements associated ("typestmt")
     # - affiliation in terms of APORA ("affiliation")
-    def ere_characterization(self, erelabel, json_obj):
+    def ere_characterization(self, erelabel):
         retv = { }
 
         if erelabel in self.thegraph:
@@ -50,7 +50,7 @@ class AidaJson:
             affiliations = set() 
             for affiliatestmtlabel in self.each_ere_adjacent_stmt(erelabel, "GeneralAffiliation.APORA_Affiliate", "object"):
                 relationlabel = self.thegraph[affiliatestmtlabel]["subject"]
-                for affiliationstmtlabel in self.each_ere_adjacent_stmt(relationlabel, "GeneralAffiliation.APORA_Affiliation", "subject":
+                for affiliationstmtlabel in self.each_ere_adjacent_stmt(relationlabel, "GeneralAffiliation.APORA_Affiliation", "subject"):
                     affiliationlabel = self.thegraph[affiliationstmtlabel]["object"]
                     affiliations.update(self._english_names(self.thegraph[affiliationlabel].get("name", [ ])))
 
@@ -85,7 +85,7 @@ class AidaJson:
                 print(label, ":", file = fout)
                 self.print_ere_characterization(node[label], fout, short = (node["predicate"] == "type"))
             else:
-                print(label, ":", _shorten_label(node[label]), file = fout)
+                print(label, ":", self._shorten_label(node[label]), file = fout)
         print("\n", file = fout)
 
     ####

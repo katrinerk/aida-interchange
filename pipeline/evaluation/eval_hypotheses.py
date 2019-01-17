@@ -16,7 +16,11 @@ import json
 import argparse
 
 
-import json_prettyprint
+from os.path import dirname, realpath
+src_path = dirname(dirname(dirname(realpath(__file__))))
+sys.path.insert(0, src_path)
+
+from  aif import AidaJson
 
 ###################################
 
@@ -35,6 +39,8 @@ args = parser.parse_args()
 # read the graph and the model-generated hypotheses
 with open(args.thegraph_json, 'r') as fin:
     json_obj = json.load(fin)
+
+mygraph_obj = AidaJson(json_obj)
 
 with open(args.hypo_json, 'r') as fin:
     hypo_obj = json.load(fin)
@@ -59,9 +65,9 @@ for stmtlabel, node in json_obj["theGraph"].items():
 # clean up the sets: statements that are supporting are not also partially supporting,
 # and statements that are (partially) supporting are not contradicting
 for hypothesis, entry in goldhypothesis.items():
-    entry["hypotheses_partially_supported"].difference_update(entry["hypotheses_supported"])
-    entry["hypotheses_contradicted"].difference_update(entry["hypotheses_supported"])
-    entry["hypotheses_contradicted"].difference_update(entry["hypotheses_partially_supported"])
+    entry.get("hypotheses_partially_supported", set()).difference_update(entry.get("hypotheses_supported", set()))
+    entry.get("hypotheses_contradicted", set()).difference_update(entry.get("hypotheses_supported", set()))
+    entry.get("hypotheses_contradicted", set()).difference_update(entry.get("hypotheses_partially_supported", set()))
 
 
 ###
@@ -74,8 +80,8 @@ for modelhypo_index, modelhypo in enumerate(hypo_obj["support"]):
     max_goldhypo = None
     
     for goldhypo in goldhypothesis.keys():
-        overlap = len(goldhypothesis[goldhypo]["hypotheses_supported"].intersection(modelhypo["statements"]))
-        partial_overlap = len(goldhypothesis[goldhypo]["hypotheses_partially_supported"].intersection(modelhypo["statements"]))
+        overlap = len(goldhypothesis[goldhypo].get("hypotheses_supported", set()).intersection(modelhypo["statements"]))
+        partial_overlap = len(goldhypothesis[goldhypo].get("hypotheses_partially_supported", set()).intersection(modelhypo["statements"]))
         # print("modelhypo", modelhypo_index, "gold", goldhypo, overlap, partial_overlap, \
         #        goldhypothesis[goldhypo]["hypotheses_supported"].intersection(modelhypo["statements"]))
 
@@ -101,16 +107,16 @@ with open(args.outfilename, "w") as fout:
         goldhypo = modelhypo_goldhypo[ modelhypo_index ]
         
         # strict precision and recall
-        truepos = len(goldhypothesis[goldhypo]["hypotheses_supported"].intersection(modelhypo["statements"]))
+        truepos = len(goldhypothesis[goldhypo].get("hypotheses_supported", set()).intersection(modelhypo["statements"]))
         strict_prec = truepos / len(modelhypo["statements"])
-        strict_rec = truepos / len(goldhypothesis[goldhypo]["hypotheses_supported"])
+        strict_rec = truepos / len(goldhypothesis[goldhypo].get("hypotheses_supported", set()))
         strict_preclist.append(strict_prec)
         strict_reclist.append(strict_rec)
 
         # lenient precision and recall
-        truepos = len((goldhypothesis[goldhypo]["hypotheses_supported"].union(goldhypothesis[goldhypo]["hypotheses_partially_supported"])).intersection(modelhypo["statements"]))
+        truepos = len((goldhypothesis[goldhypo].get("hypotheses_supported", set()).union(goldhypothesis[goldhypo].get("hypotheses_partially_supported", set()))).intersection(modelhypo["statements"]))
         lenient_prec = truepos / len(modelhypo["statements"])
-        lenient_rec = truepos / len(goldhypothesis[goldhypo]["hypotheses_supported"].union(goldhypothesis[goldhypo]["hypotheses_partially_supported"]))
+        lenient_rec = truepos / len(goldhypothesis[goldhypo].get("hypotheses_supported", set()).union(goldhypothesis[goldhypo].get("hypotheses_partially_supported", set())))
         lenient_preclist.append(strict_prec)
         lenient_reclist.append(strict_rec)
     
@@ -130,22 +136,22 @@ with open(args.outfilename, "w") as fout:
         print("------------------------------------", file = fout)        
         print("Model hypothesis details:\n", file = fout)
         
-        for stmtlabel in json_prettyprint.sorted_statements_for_output(modelhypo["statements"], json_obj):
-            json_prettyprint.print_statement_info(stmtlabel, json_obj, fout)
+        for stmtlabel in mygraph_obj.sorted_statements_for_output(modelhypo["statements"]):
+            mygraph_obj.print_statement_info(stmtlabel, fout)
         print("\n", file = fout)
 
         print("------------------------------------", file = fout)
         print("Superfluous statements wrt.strict gold hypothesis membership:\n", file = fout)
 
-        for stmtlabel in json_prettyprint.sorted_statements_for_output(set(modelhypo["statements"]).difference(goldhypothesis[goldhypo]["hypotheses_supported"]), json_obj):
-            json_prettyprint.print_statement_info(stmtlabel, json_obj, fout)
+        for stmtlabel in mygraph_obj.sorted_statements_for_output(set(modelhypo["statements"]).difference(goldhypothesis[goldhypo]["hypotheses_supported"])):
+            mygraph_obj.print_statement_info(stmtlabel, fout)
         print("\n", file = fout)            
 
         print("------------------------------------\n", file = fout)
         print("Missing statements from gold hypothesis (strict membership):\n", file = fout)
         
-        for stmtlabel in json_prettyprint.sorted_statements_for_output(goldhypothesis[goldhypo]["hypotheses_supported"].difference(modelhypo["statements"]), json_obj):
-            json_prettyprint.print_statement_info(stmtlabel, json_obj, fout)
+        for stmtlabel in mygraph_obj.sorted_statements_for_output(goldhypothesis[goldhypo]["hypotheses_supported"].difference(modelhypo["statements"])):
+            mygraph_obj.print_statement_info(stmtlabel, fout)
         print("\n", file = fout)
 
 
