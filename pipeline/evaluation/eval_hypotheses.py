@@ -69,13 +69,15 @@ for hypothesis, entry in goldhypothesis.items():
 
 
 ###
-# for each model hypothesis, find the closest matching gold hypothesis
+# for each model hypothesis, find the closest matching gold hypothesis.
+# Also make a note of all equally matching gold hypotheses so we can compute coverage
 modelhypo_goldhypo = { }
+goldhypo_covered = set()
 
 for modelhypo_index, modelhypo in enumerate(hypo_obj["support"]):
     max_overlap = 0
     max_partial_overlap = 0
-    max_goldhypo = None
+    max_goldhypo = [ ]
     
     for goldhypo in goldhypothesis.keys():
         overlap = len(goldhypothesis[goldhypo].get("hypotheses_supported", set()).intersection(modelhypo["statements"]))
@@ -83,12 +85,18 @@ for modelhypo_index, modelhypo in enumerate(hypo_obj["support"]):
         # print("modelhypo", modelhypo_index, "gold", goldhypo, overlap, partial_overlap, \
         #        goldhypothesis[goldhypo]["hypotheses_supported"].intersection(modelhypo["statements"]))
 
-        if overlap > max_overlap or (overlap == max_overlap and partial_overlap > max_partial_overlap):
+        if overlap == max_overlap and partial_overlap == max_partial_overlap:
+            # add this to the set of current best gold hypotheses
+            max_goldhypo.append(goldhypo)
+            
+        elif overlap > max_overlap or (overlap == max_overlap and partial_overlap > max_partial_overlap):
             max_overlap = overlap
             max_partial_overlap = partial_overlap
-            max_goldhypo = goldhypo
+            # discard all previous best hypotheses, as this one has trumped them
+            max_goldhypo = [ goldhypo ]
 
-    modelhypo_goldhypo[modelhypo_index] = max_goldhypo
+    goldhypo_covered.update(max_goldhypo)
+    modelhypo_goldhypo[modelhypo_index] = max_goldhypo[0]
     # print("model hypothesis", modelhypo_index, ":", max_goldhypo, "with overlap", max_overlap, "/", max_partial_overlap)
 
     
@@ -165,4 +173,4 @@ for modelhypo_index, modelhypo in enumerate(hypo_obj["support"]):
 print("===========", file = sys.stderr)
 print("Macro-average Strict  Prec:", round(sum(strict_preclist) / len(strict_preclist), 3), "Rec:", round(sum(strict_reclist) / len(strict_reclist), 3))
 print("Macro-average Lenient Prec:", round(sum(lenient_preclist) / len(lenient_preclist), 3), "Rec:", round(sum(lenient_reclist) / len(lenient_reclist), 3))
-
+print("Coverage in percentage of gold hypotheses:", round(len(goldhypo_covered) / len(list(goldhypothesis.keys())), 3))

@@ -109,7 +109,7 @@ class AidaJson:
     # print characterization of a given statement in terms of:
     # predicate, subject, object
     # subject and object can be strings or ERE characterizations
-    def print_statement_info(self, stmtlabel, fout):
+    def print_statement_info(self, stmtlabel, fout, additional = None):
         if stmtlabel not in self.thegraph:
             return
 
@@ -123,6 +123,8 @@ class AidaJson:
                 self.print_ere_characterization(node[label], fout, short = (node["predicate"] == "type"))
             else:
                 print(label, ":", self._shorten_label(node[label]), file = fout)
+        if additional:
+            print("---", additional, "---")
         print("\n", file = fout)
 
     ####
