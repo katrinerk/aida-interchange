@@ -16,10 +16,13 @@ from tqdm import tqdm
 # * compute pairwise distances between statements
 class JsonInterface:
     #def __init__(self, mygraph, entrypoints, simplification_level = 0, maxdist = 5):
-    def __init__(self, mygraph, simplification_level = 0, maxdist = 5):
+    def __init__(self, mygraph, simplification_level = 0, maxdist = 5, compute_dist = True):
         self.mygraph = mygraph
-        
+
+        # main json object
         self.json_obj = { }
+        # justification object
+        self.json_just_obj = { }
 
         # re-encode the graph
         self.json_obj["theGraph"] = { }
@@ -30,35 +33,42 @@ class JsonInterface:
         self.ere_counter = 0
         self.coref_counter = 0
 
+        # do the work
         self.json_obj["theGraph"] = self._transform_graph()
+        
         # and pairwise statement distances. we consider maximal distances of 5.
-        self.dist = { }
-        self.maxdist = maxdist
+        if compute_dist:
+            self.dist = { }
+            self.maxdist = maxdist
 
-        # in each statement, report possible coref duplicates
-        # commented away as this does not seem to help aidabaseline.wppl
-        # self._list_coref_duplicates()
 
-        # turn distance into proximity
-        self.json_obj["statementProximity"] = self._compute_proximity()
+            # turn distance into proximity
+            self.json_obj["statementProximity"] = self._compute_proximity()
 
         # complete the entry point information given 
         # self.json_obj["entrypoints"] = self._characterize_entrypoints(entrypoints)
         # self.json_obj["entrypoints"] = entrypoints
 
-        # parameters for the one-class cluster generative model
-        self.json_obj["parameters"] = { "shape" :1.0, "scale" : 0.001 }
-        self.json_obj["numSamples"] = 100
-        self.json_obj["memberProb"] = 0.1
+        # parameters for the one-class cluster generative model:
+        # don't do that in this json object anymore
+        ## self.json_obj["parameters"] = { "shape" :1.0, "scale" : 0.001 }
+        ## self.json_obj["numSamples"] = 100
+        ## self.json_obj["memberProb"] = 0.1
 
         # possibly simplify the model if we don't want to deal with the whole complexity of the data.
         # level 0 = no simplification
         # level 1 = fewer coref cluster statements
         # level 2 = no coref cluster statements
         self._simplify(simplification_level)
-        
+
+    # write main json output file
     def write(self, io):
         json.dump(self.json_obj, io, indent = 1)
+
+
+    # write justifications
+    def write_just(self, io):
+        pass
 
     ###################################
     # functions that are actually doing the work
@@ -66,11 +76,14 @@ class JsonInterface:
     def _transform_graph(self):
         logging.info('Transforming the graph...')
 
-        retv = { }
-
+        self.json_obj["theGraph"] = { }
         self.json_obj["ere"] = [ ]
         self.json_obj["statements"] = [ ]
         ## self.json_obj["coref_statements"] = [ ]
+
+        # this is where the justifications go:
+        # node name -> justification
+        self.json_just_obj = { }
         
         self.statement_counter = 0
         self.ere_counter = 0
@@ -81,38 +94,38 @@ class JsonInterface:
             # entities, events, relations: they  have a type. They also have a list of adjacent statements,
             # and an index. They have optional names.
             if node.is_ere():
-                retv[node.name] = {
+                self.json_obj["theGraph"][node.name] = {
                     "adjacent": self._adjacent_statements(node),
                     "index": self.ere_counter}
 
                 if node.is_event():
-                    retv[node.name]["type"] = "Event"
+                    self.json_obj["theGraph"][node.name]["type"] = "Event"
                 elif node.is_entity():
-                    retv[node.name]["type"] = "Entity"
+                    self.json_obj["theGraph"][node.name]["type"] = "Entity"
                 else:
-                    retv[node.name]["type"] = "Relation"
+                    self.json_obj["theGraph"][node.name]["type"] = "Relation"
 
                 enames = list(set(self.mygraph.names_of_ere(node.name)))
                 if len(enames) > 0:
-                    retv[node.name]["name"] = enames
+                    self.json_obj["theGraph"][node.name]["name"] = enames
                     
                 self.ere_counter += 1
                 self.json_obj["ere"].append(node.name)
                 
             # node describing a cluster: has a prototypical member
             elif node.is_sameas_cluster():
-                retv[node.name] = {"type": "SameAsCluster"}
+                self.json_obj["theGraph"][node.name] = {"type": "SameAsCluster"}
                 
                 content = node.get("prototype", shorten=False)
                 if len(content) > 0:
                     # record this node only if it has a prototype as required
-                    retv[node.name]["prototype"] = str(content.pop())
+                    self.json_obj["theGraph"][node.name]["prototype"] = str(content.pop())
                 else:
-                    del retv[node.name]
+                    del self.json_obj["theGraph"][node.name]
 
             # clusterMembership statements have a cluster, a clusterMember, and a maximal confidence level
             elif node.is_cluster_membership():
-                retv[node.name] = {
+                self.json_obj["theGraph"][node.name] = {
                     "type": "ClusterMembership",
                     "index": self.coref_counter}
 
@@ -120,27 +133,27 @@ class JsonInterface:
                 for label in ["cluster", "clusterMember"]:
                     content = node.get(label, shorten=False)
                     if len(content) > 0:
-                        retv[node.name][label] = str(content.pop())
+                        self.json_obj["theGraph"][node.name][label] = str(content.pop())
                 
 
                 # confidence
                 conflevels = self.mygraph.confidence_of(node.name)
                 if len(conflevels) > 0:
-                    retv[ node.name]["conf"] = max(conflevels)
+                    self.json_obj["theGraph"][ node.name]["conf"] = max(conflevels)
 
                 # check that the node is well-formed
-                if all(label in retv[node.name] for label in ["cluster", "clusterMember", "conf"]):
+                if all(label in self.json_obj["theGraph"][node.name] for label in ["cluster", "clusterMember", "conf"]):
                     self.coref_counter += 1
                     # self.json_obj["coref_statements"].append(node.name)
                 else:
-                    del retv[node.name]
+                    del self.json_obj["theGraph"][node.name]
                   
                     
             # statements have a single subj, pred, obj, a maximal confidence level, and possibly mentions.
             # they also have hypotheses that they support, partially support, and contradict
             elif node.is_statement():
                 # type
-                retv[node.name] = {
+                self.json_obj["theGraph"][node.name] = {
                     "type": "Statement",
                     "index": self.statement_counter}
 
@@ -148,48 +161,46 @@ class JsonInterface:
                 for label in ["subject", "object"]:
                     content = node.get(label, shorten=False)
                     if len(content) > 0:
-                        retv[node.name][label] = str(content.pop())
+                        self.json_obj["theGraph"][node.name][label] = str(content.pop())
 
                 predicates = node.get("predicate", shorten=True)
                 if len(predicates) > 0:
-                    retv[node.name]["predicate"] = str(predicates.pop())
+                    self.json_obj["theGraph"][node.name]["predicate"] = str(predicates.pop())
 
                 # confidence
                 conflevels = self.mygraph.confidence_of(node.name)
                 if len(conflevels) > 0:
-                    retv[ node.name]["conf"] = max(conflevels)
+                    self.json_obj["theGraph"][ node.name]["conf"] = max(conflevels)
 
                 # source document ids
                 sources = set(self.mygraph.sources_associated_with(node.name))
                 if len(sources) > 0:
-                    retv[node.name]["source"] = list(sources)
+                    self.json_obj["theGraph"][node.name]["source"] = list(sources)
 
                 # hypotheses
                 hypotheses = set(self.mygraph.hypotheses_supported(node.name))
                 if len(hypotheses) > 0:
-                    retv[node.name]["hypotheses_supported"] = list(hypotheses)
+                    self.json_obj["theGraph"][node.name]["hypotheses_supported"] = list(hypotheses)
                 hypotheses = set(self.mygraph.hypotheses_partially_supported(node.name))
                 if len(hypotheses) > 0:
-                    retv[node.name]["hypotheses_partially_supported"] = list(hypotheses)
+                    self.json_obj["theGraph"][node.name]["hypotheses_partially_supported"] = list(hypotheses)
                 hypotheses = set(self.mygraph.hypotheses_contradicted(node.name))
                 if len(hypotheses) > 0:
-                    retv[node.name]["hypotheses_contradicted"] = list(hypotheses)
+                    self.json_obj["theGraph"][node.name]["hypotheses_contradicted"] = list(hypotheses)
 
                 # well-formedness check
-                if all(label in retv[node.name] for label in ["conf", "predicate", "subject", "object"]):
+                if all(label in self.json_obj["theGraph"][node.name] for label in ["conf", "predicate", "subject", "object"]):
                     self.statement_counter += 1
                     self.json_obj["statements"].append(node.name)
                 else:
-                    del retv[node.name]
+                    del self.json_obj["theGraph"][node.name]
 
         ## # replace labels by label indices in adjacency statements
-        ## for nodelabel in retv:
-        ##     if "adjacent" in retv[nodelabel]:
-        ##         retv[nodelabel]["adjacent"] = [ retv[stmt]["index"] for stmt in retv[nodelabel]["adjacent"]]
+        ## for nodelabel in self.json_obj["theGraph"]:
+        ##     if "adjacent" in self.json_obj["theGraph"][nodelabel]:
+        ##         self.json_obj["theGraph"][nodelabel]["adjacent"] = [ self.json_obj["theGraph"][stmt]["index"] for stmt in self.json_obj["theGraph"][nodelabel]["adjacent"]]
 
         logging.info('Done.')
-
-        return retv
 
     # for an entity, relation, or event, determine all statements that mention it
     def _adjacent_statements(self, node):

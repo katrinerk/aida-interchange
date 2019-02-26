@@ -303,6 +303,20 @@ class AidaGraph(RDFGraph):
             for source in self.get_node_objs(jlabel, "source"):
                 yield source
 
+    # iterator over source document ids and text justifications associate with the statement node.
+    # yields one tuple (sources, startOffsets, endOffsetsInclusive) for each justifiedBy
+    # where sources, startOffsets, endOffsetsInclusive are lists
+    def sources_and_textjust_associated_with(self, nodelabel):
+        if not self.has_node(nodelabel) or \
+                not self.get_node(nodelabel).is_statement():
+            return
+
+        for jlabel in self.get_node_objs(nodelabel, "justifiedBy"):
+            sources = list(set(self.get_node_objs(jlabel, "source")))
+            starts = list(set(self.get_node_objs(jlabel, "startOffset")))
+            ends = list(set(self.get_node_objs(jlabel, "endOffsetInclusive")))
+            yield (sources, starts, ends)
+                
     # iterator over source document ids associate with a typing statement,
     # this handles both source document information from the statement node,
     # as well as from the subject ERE node (for RPI data)
