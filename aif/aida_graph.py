@@ -315,7 +315,7 @@ class AidaGraph(RDFGraph):
             sources = list(set(self.get_node_objs(jlabel, "source")))
             starts = list(set(self.get_node_objs(jlabel, "startOffset")))
             ends = list(set(self.get_node_objs(jlabel, "endOffsetInclusive")))
-            yield (sources, starts, ends)
+            yield ({"source": sources, "startOffset":starts, "endOffsetInclusive":ends})
                 
     # iterator over source document ids associate with a typing statement,
     # this handles both source document information from the statement node,

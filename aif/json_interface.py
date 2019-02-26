@@ -34,7 +34,7 @@ class JsonInterface:
         self.coref_counter = 0
 
         # do the work
-        self.json_obj["theGraph"] = self._transform_graph()
+        self._transform_graph()
         
         # and pairwise statement distances. we consider maximal distances of 5.
         if compute_dist:
@@ -68,7 +68,7 @@ class JsonInterface:
 
     # write justifications
     def write_just(self, io):
-        pass
+        json.dump(self.json_just_obj, io, indent = 1)
 
     ###################################
     # functions that are actually doing the work
@@ -91,6 +91,7 @@ class JsonInterface:
         
         # we write out statements, events, entities, relations
         for node in tqdm(self.mygraph.nodes()):
+            
             # entities, events, relations: they  have a type. They also have a list of adjacent statements,
             # and an index. They have optional names.
             if node.is_ere():
@@ -150,7 +151,8 @@ class JsonInterface:
                   
                     
             # statements have a single subj, pred, obj, a maximal confidence level, and possibly mentions.
-            # they also have hypotheses that they support, partially support, and contradict
+            # they also have hypotheses that they support, partially support, and contradict.
+            # Statements also have justifications, which go in the justification object
             elif node.is_statement():
                 # type
                 self.json_obj["theGraph"][node.name] = {
@@ -189,11 +191,21 @@ class JsonInterface:
                     self.json_obj["theGraph"][node.name]["hypotheses_contradicted"] = list(hypotheses)
 
                 # well-formedness check
+                wellformed = False
                 if all(label in self.json_obj["theGraph"][node.name] for label in ["conf", "predicate", "subject", "object"]):
+                    wellformed = True
                     self.statement_counter += 1
                     self.json_obj["statements"].append(node.name)
                 else:
                     del self.json_obj["theGraph"][node.name]
+
+                # record justification
+                if wellformed:
+                    self.json_just_obj[node.name] = {}
+                    textjustifications = list(self.mygraph.sources_and_textjust_associated_with(node.name))
+                    if len(textjustifications) > 0:
+                        self.json_just_obj[node.name] = textjustifications
+                    
 
         ## # replace labels by label indices in adjacency statements
         ## for nodelabel in self.json_obj["theGraph"]:

@@ -124,7 +124,7 @@ class AidaJson:
             else:
                 print(label, ":", self._shorten_label(node[label]), file = fout)
         if additional:
-            print("---", additional, "---")
+            print("---", additional, "---", file = fout)
         print("\n", file = fout)
 
     ####
