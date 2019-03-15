@@ -201,7 +201,7 @@ class JsonInterface:
 
                 # record justification
                 if wellformed:
-                    self.json_just_obj[node.name] = {}
+                    self.json_just_obj[node.name] = [ ]
                     textjustifications = list(self.mygraph.sources_and_textjust_associated_with(node.name))
                     if len(textjustifications) > 0:
                         self.json_just_obj[node.name] = textjustifications
