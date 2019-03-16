@@ -22,7 +22,8 @@ def queries_for_aida_result(
         'DESCRIBE ?x\n' \
         'WHERE {\n'
 
-    node_query_item_list = []
+    ere_query_item_list = []
+    cluster_query_item_list = []
     stmt_query_item_list = []
 
     for stmt in result['statements']:
@@ -34,17 +35,12 @@ def queries_for_aida_result(
             object_id = stmt_entry['object']
 
             # add subject to node_str_list for node query
-            node_query_item_list.append('<{}>'.format(subject_id))
+            ere_query_item_list.append('<{}>'.format(subject_id))
 
-            if predicate_id == 'type':
-                stmt_query_item_list.append(
-                    '{{\n?x rdf:subject <{}> .\n?x rdf:predicate rdf:type .\n'
-                    '?x rdf:object <{}> .\n}}'.format(subject_id, object_id))
-
-            else:
+            if predicate_id != 'type':
                 # add object to node_str_list for node query if
                 # it's not a typing statement
-                node_query_item_list.append('<{}>'.format(object_id))
+                ere_query_item_list.append('<{}>'.format(object_id))
 
                 stmt_query_item_list.append(
                     '{{\n?x rdf:subject <{}> .\n?x rdf:predicate '
@@ -63,8 +59,8 @@ def queries_for_aida_result(
                         soin_id, cluster_id)
             member_id = stmt_entry['clusterMember']
 
-            node_query_item_list.append('<{}>'.format(cluster_id))
-            node_query_item_list.append('<{}>'.format(member_id))
+            cluster_query_item_list.append('<{}>'.format(cluster_id))
+            ere_query_item_list.append('<{}>'.format(member_id))
 
             stmt_query_item_list.append(
                 '{{\n?x aida:cluster <{}> .\n'
@@ -73,7 +69,12 @@ def queries_for_aida_result(
         else:
             print('Unrecognized statement:\n{}'.format(stmt_entry))
 
-    node_query_item_list = list(set(node_query_item_list))
+    for ere in ere_query_item_list:
+        stmt_query_item_list.append(
+            '{{\n?x rdf:subject {} .\n'
+            '?x rdf:predicate rdf:type .\n}}'.format(ere))
+
+    node_query_item_list = list(set(ere_query_item_list + cluster_query_item_list))
     stmt_query_item_list = list(set(stmt_query_item_list))
 
     node_query_list = produce_node_queries(
