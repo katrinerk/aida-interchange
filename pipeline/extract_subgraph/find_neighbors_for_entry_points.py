@@ -83,7 +83,7 @@ def find_coref_closure(starting_nodes, neighbors_mapping, start_from_ere=True):
 def find_typing_statements(ere_closure, neighbors_mapping):
     typing_statements = set([])
     for ere in ere_closure:
-        ere_types = neighbors_mapping['one-hop'].get(ere, [])
+        ere_types = neighbors_mapping['zero-hop-typing'].get(ere, [])
         # there should be one and only one typing statement for each ERE node
         # in the closure, if not, we print a warning message.
         if not ere_types:
@@ -153,15 +153,14 @@ def find_neighbors_for_entry_point(
     all_neighbors['cluster_memberships'].update(cluster_memberships_zero)
 
     # search for typing statements of zero-hop EREs
-    # (considered as one-hops neighbors)
-    typing_statements = find_typing_statements(
-        ere_closure_zero, neighbors_mapping)
+    # (considered as zero-hops neighbors)
+    typing_zero = find_typing_statements(ere_closure_zero, neighbors_mapping)
 
     if verbose:
         print('\nTyping statements of zero-hop ERE closure: \n{}'.format(
-            '\n'.join(map(str, typing_statements))))
+            '\n'.join(map(str, typing_zero))))
 
-    all_neighbors['typing_statements'].update(typing_statements)
+    all_neighbors['typing_statements'].update(typing_zero)
 
     # search for half-hop neighbors, as well as corresponding statements
     statements_half, ere_closure_half, cluster_closure_half, \
@@ -185,6 +184,16 @@ def find_neighbors_for_entry_point(
     all_neighbors['clusters'].update(cluster_closure_half)
     all_neighbors['cluster_memberships'].update(cluster_membership_half)
 
+    # search for typing statements of half-hop EREs
+    # (considered as half-hops neighbors)
+    typing_half = find_typing_statements(ere_closure_half, neighbors_mapping)
+
+    if verbose:
+        print('\nTyping statements of half-hop ERE closure: \n{}'.format(
+            '\n'.join(map(str, typing_half))))
+
+    all_neighbors['typing_statements'].update(typing_half)
+
     # search for one-hop neighbors, as well as corresponding statements
     statements_one, ere_closure_one, cluster_closure_one, \
         cluster_membership_one = find_half_hop_neighbors(
@@ -206,6 +215,16 @@ def find_neighbors_for_entry_point(
     all_neighbors['eres'].update(ere_closure_one)
     all_neighbors['clusters'].update(cluster_closure_one)
     all_neighbors['cluster_memberships'].update(cluster_membership_one)
+
+    # search for typing statements of one-hop EREs
+    # (considered as one-hops neighbors)
+    typing_one = find_typing_statements(ere_closure_one, neighbors_mapping)
+
+    if verbose:
+        print('\nTyping statements of one-hop ERE closure: \n{}'.format(
+            '\n'.join(map(str, typing_one))))
+
+    all_neighbors['typing_statements'].update(typing_one)
 
     return all_neighbors
 

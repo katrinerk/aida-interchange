@@ -20,7 +20,7 @@ neighbors_mapping_all = {
     # neighbors of objects in general statements
     'half-hop-obj': defaultdict(set),
     # one-hop neighbors of EREs in typing statements
-    'one-hop': defaultdict(set)
+    'zero-hop-typing': defaultdict(set)
 }
 
 print('Reading all split neighbor information from directory {}...'.format(fin_dir))

@@ -30,8 +30,8 @@ neighbors_mapping = {
     'half-hop-subj': defaultdict(set),
     # neighbors of objects in general statements
     'half-hop-obj': defaultdict(set),
-    # one-hop neighbors of EREs in typing statements
-    'one-hop': defaultdict(set)
+    # zero-hop neighbors of EREs in typing statements
+    'zero-hop-typing': defaultdict(set)
 }
 
 print('Reading triples from {}...'.format(fin_path))
@@ -56,7 +56,7 @@ for statement in g.subjects(predicate=RDF.type, object=RDF.Statement):
         # (and it must be a typing statement), this is a one-hop
         if pred_namespace == RDF:
             assert pred_name == 'type'
-            distance = 'one-hop'
+            distance = 'zero-hop-typing'
         # if the predicate lives in the LDC_ONT namespace, this is a half-hop
         else:
             assert pred_namespace == LDC_ONT
@@ -68,7 +68,7 @@ for statement in g.subjects(predicate=RDF.type, object=RDF.Statement):
                     neighbors_mapping['half-hop-subj'][subj].add(obj)
                     neighbors_mapping['half-hop-obj'][obj].add(subj)
                 else:
-                    neighbors_mapping['one-hop'][subj].add(obj)
+                    neighbors_mapping['zero-hop-typing'][subj].add(obj)
 print('Done.')
 
 # convert sets to lists for json dump
