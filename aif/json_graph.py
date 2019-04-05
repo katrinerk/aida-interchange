@@ -41,27 +41,79 @@ class AidaJson:
             if node["type"] == "Statement":
                 yield (nodelabel, node)
 
+    # arguments of a statement
+    def statement_args(self, stmtlabel):
+        if stmtlabel not in self.thegraph or not self.is_statement(stmtlabel):
+            return [ ]
+        else:
+            return [ self.thegraph[stmtlabel][role] for role in ["subject", "object"]]
+
     # is this node an Entity/Event/Relation/Statement
     def is_nodetype(self, nodelabel, nodetype):
         return (nodelabel in self.thegraph and self.thegraph[nodelabel]["type"] == nodetype)
 
+    def is_node(self, nodelabel):
+        return nodelabel in self.thegraph
+    
+    def is_statement(self, nodelabel):
+        return self.is_nodetype(nodelabel, "Statement")
+
+    def is_entity(self, nodelabel):
+        return self.is_nodetype(nodelabel, "Entity")
+
+    def is_event(self, nodelabel):
+        return self.is_nodetype(nodelabel, "Event")
+
+    def is_relation(self, nodelabel):
+        return self.is_nodetype(nodelabel, "Relation")
+                
     def is_ere(self, nodelabel):
-        return (self.is_nodetype(nodelabel, "Entity") or self.is_nodetype(nodelabel, "Event") or self.is_nodetype(nodelabel, "Relation"))
-                
-                
+        return self.is_entity(nodelabel) or self.is_event(nodelabel) or self.is_relation(nodelabel)
+
     ###
     # given an ERE label, return labels of all adjacent statements
     # with the given predicate and where erelabel is an argument in the given ererole (subject, object)
     def each_ere_adjacent_stmt(self, erelabel, predicate, ererole):
+        for stmtlabel in self.each_ere_adjacent_stmt_anyrel(erelabel):
+            if self.thegraph[stmtlabel][ererole] == erelabel and \
+              self.thegraph[stmtlabel]["predicate"] == predicate:
+                yield stmtlabel
+
+    ###
+    # given an ERE label, return labels of all adjacent statements
+    def each_ere_adjacent_stmt_anyrel(self, erelabel):
         if erelabel not in self.thegraph:
             return
 
         for stmtlabel in self.thegraph[erelabel].get("adjacent", []):
-            if stmtlabel in self.thegraph and \
-              self.thegraph[stmtlabel][ererole] == erelabel and \
-              self.thegraph[stmtlabel]["predicate"] == predicate:
+            if stmtlabel in self.thegraph:
                 yield stmtlabel
+        
 
+    ###
+    # possible types of an ERE: strings
+    def possible_types(self, erelabel):
+        return set(self.shorten_label(self.thegraph[stmtlabel]["object"]) \
+                       for stmtlabel in self.each_ere_adjacent_stmt(erelabel, "type", "subject"))
+
+    ###
+    # possible affiliations of an ERE: IDs of affiliation EREs
+    def possible_affiliations(self, erelabel):
+        affiliations = set() 
+        for affiliatestmtlabel in self.each_ere_adjacent_stmt(erelabel, "GeneralAffiliation.APORA_Affiliate", "object"):
+            
+            relationlabel = self.thegraph[affiliatestmtlabel]["subject"]
+            for affiliationstmtlabel in self.each_ere_adjacent_stmt(relationlabel, "GeneralAffiliation.APORA_Affiliation", "subject"):
+                affiliationlabel = self.thegraph[affiliationstmtlabel]["object"]
+                affiliations.add(affiliationlabel)
+
+        return affiliations
+
+    ####
+    # names, if any
+    def ere_names(self, erelabel):
+        return self.thegraph[erelabel].get("name", [])
+    
     ######################################
 
     ###
@@ -75,23 +127,19 @@ class AidaJson:
 
         if erelabel in self.thegraph:
             retv["label"] = erelabel
-            retv["nodetype"] = self._shorten_label(self.thegraph[erelabel]["type"])
+            retv["nodetype"] = self.shorten_label(self.thegraph[erelabel]["type"])
 
-            retv["typestmt"] = ", ".join(set(self._shorten_label(self.thegraph[stmtlabel]["object"]) \
-                                            for stmtlabel in self.each_ere_adjacent_stmt(erelabel, "type", "subject")))
+            retv["typestmt"] = ", ".join(self.possible_types(erelabel))
 
-            retv["name"] = ", ".join(self._english_names(self.thegraph[erelabel].get("name", [])))
+            retv["name"] = ", ".join(self.english_names(self.thegraph[erelabel].get("name", [])))
 
-            affiliations = set() 
-            for affiliatestmtlabel in self.each_ere_adjacent_stmt(erelabel, "GeneralAffiliation.APORA_Affiliate", "object"):
-                relationlabel = self.thegraph[affiliatestmtlabel]["subject"]
-                for affiliationstmtlabel in self.each_ere_adjacent_stmt(relationlabel, "GeneralAffiliation.APORA_Affiliation", "subject"):
-                    affiliationlabel = self.thegraph[affiliationstmtlabel]["object"]
-                    if "name" in self.thegraph[affiliationlabel]:
-                        affiliations.update(self.thegraph[affiliationlabel]["name"])
-                                             
+            affiliations = set()
+            for affiliationlabel in self.possible_affiliations(erelabel):
+                if "name" in self.thegraph[affiliationlabel]:
+                    affiliations.update(self.thegraph[affiliationlabel]["name"])        
 
-            retv["affiliation"] = ", ".join(self._english_names(affiliations))
+
+            retv["affiliation"] = ", ".join(self.english_names(affiliations))
 
         return retv
 
@@ -122,7 +170,7 @@ class AidaJson:
                 print(label, ":", file = fout)
                 self.print_ere_characterization(node[label], fout, short = (node["predicate"] == "type"))
             else:
-                print(label, ":", self._shorten_label(node[label]), file = fout)
+                print(label, ":", self.shorten_label(node[label]), file = fout)
         if additional:
             print("---", additional, "---", file = fout)
         print("\n", file = fout)
@@ -203,7 +251,7 @@ class AidaJson:
             if "name" in characterization and characterization["name"] != "":
                 nodecontent += characterization["name"]
         
-            dot.node(self._shorten_label(nodelabel),  nodecontent, color=erecolor, style = "filled")
+            dot.node(self.shorten_label(nodelabel),  nodecontent, color=erecolor, style = "filled")
 
 
         # make statements into connections
@@ -214,14 +262,14 @@ class AidaJson:
             
             # statements that connects two EREs
             if self.is_ere(node["subject"]) and self.is_ere(node["object"]):
-                dot.edge(self._shorten_label(node["subject"]), self._shorten_label(node["object"]), label = node["predicate"])
+                dot.edge(self.shorten_label(node["subject"]), self.shorten_label(node["object"]), label = node["predicate"])
 
             else:
                 if unary_stmt:
                     # include unary statements too
                     if self.is_ere(node["subject"]):
-                        dot.edge(self._shorten_label(node["subject"]), self._shorten_label(node["subject"]), \
-                                     label = self._shorten_label(node["object"]))
+                        dot.edge(self.shorten_label(node["subject"]), self.shorten_label(node["subject"]), \
+                                     label = self.shorten_label(node["object"]))
         
 
         if outfilename is not None:
@@ -235,12 +283,12 @@ class AidaJson:
 
     ###
     # retain only names that are probably English
-    def _english_names(self, labellist):
+    def english_names(self, labellist):
         return [label for label in labellist if re.search(r"^[A-Za-z0-9\-,\.\'\"\(\)\? ]+$", label)]
 
     ###
     # given a label, shorten it for easier reading
-    def _shorten_label(self, label):
+    def shorten_label(self, label):
         return label.split("/")[-1].split("#")[-1]
 
     
