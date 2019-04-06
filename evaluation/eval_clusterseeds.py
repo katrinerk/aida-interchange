@@ -18,7 +18,7 @@ src_path = dirname(dirname(realpath(__file__)))
 sys.path.insert(0, src_path)
 
 from  aif import AidaJson
-from seeds import ClusterSeeds
+from seeds import ClusterSeeds, ClusterExpansion
 from one_aida_graph_scorer import AidaGraphScorer
 
 
@@ -76,9 +76,11 @@ for graph_name in graph_soin.keys():
         
         # make cluster seeds
         clusterseed_obj = ClusterSeeds(graph_obj, soin_obj)
+        hypothesis_obj = ClusterExpansion(graph_obj, clusterseed_obj.finalize())
+        hypothesis_obj.type_completion()        
 
         # obtain the cluster seeds as a json object
-        hypo_json = clusterseed_obj.to_json()
+        hypo_json = hypothesis_obj.to_json()
 
         ## # print out hypothesis info, don't evaluate
         ## print(graph_name)

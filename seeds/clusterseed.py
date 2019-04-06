@@ -1,5 +1,8 @@
 # Katrin Erk March 2019
 # Rule-based creation of initial hypotheses
+# This only add the statements that the Statement of Information Need asks for,
+# but constructs all possible cluster seeds that can be made using different statements
+# that all fill the same SOIN
 
 import sys
 from collections import deque
@@ -11,7 +14,7 @@ src_path = dirname(dirname(realpath(__file__)))
 sys.path.insert(0, src_path)
 
 from  aif import AidaJson
-from seeds.aidahypothesis import AidaHypothesis
+from seeds.aidahypothesis import AidaHypothesis, AidaHypothesisCollection
 from seeds.hypothesisfilter import AidaHypothesisFilter
 
 #########
@@ -43,15 +46,14 @@ class OneClusterSeed:
 
         if unfillable is None: self.unfillable = set()
         else: self.unfillable = unfillable
-            
-    # make a json object describing this hypothesis
-    def to_json(self):
-        return {
-            "statements" : list(self.hypothesis.stmts),
-            "failedQueries": list(map( lambda ix: self.core_constraints[ix], self.unfillable)), 
-            "queryStatements" : list(self.hypothesis.core_stmts)
-            }
 
+    # finalize:
+    # report failed queries ot the underlying AidaHypothesis object
+    def finalize(self):
+        self.hypothesis.add_failed_queries( list(map( lambda ix: self.core_constraints[ix], self.unfillable)) )
+
+        return self.hypothesis
+            
     # extend hypothesis by one statement filling the next fillable core constraint.
     # returns a list of OneClusterSeed objects
     def extend(self):
@@ -103,7 +105,9 @@ class OneClusterSeed:
                 new_unfillable = self.unfillable.copy()
                 
                 # extended hypothesis
-                new_hypothesis = self.hypothesis.extend(stmtlabel)
+                new_hypothesis = self.hypothesis.extend(stmtlabel, core = True)
+                # if new_hypothesis is None:
+                #    print("HIER none in oneclusterseed.extend")
 
                 retv.append(OneClusterSeed(self.graph_obj, self.core_constraints, new_hypothesis, 
                    new_qvar_filler, new_unfilled, new_unfillable))
@@ -185,23 +189,12 @@ class ClusterSeeds:
         # make seed clusters
         self.hypotheses = self._make_seeds()
 
-    # compile json object that lists all the hypotheses with their statements
-    def to_json(self):
-       
-        # make a json in the right format.
-        # entries: "probs", "support". "probs": add dummy uniform probabilities
-        json_out = { "probs": [ 1.0 / len(self.hypotheses) ] * len(self.hypotheses),
-                     "support" : [ ]
-                   }
-        for hyp in self.hypotheses:
-            json_out["support"].append(hyp.to_json())
 
-        return json_out
-
-    # make a list of strings with the new cluster seeds in readable form
-    def to_s(self):
-        return [ hyp.hypothesis.to_s() for hyp in self.hypotheses ]
-
+    # export hypotheses to AidaHypothesisCollection
+    def finalize(self):
+        hypotheses_for_export = [ h.finalize() for h in self.hypotheses ]
+        return AidaHypothesisCollection( hypotheses_for_export)
+        
     # create initial cluster seeds.
     # this is called from __init__
     def _make_seeds(self):
@@ -213,7 +206,6 @@ class ClusterSeeds:
 
             # start a new hypothesis
             core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], AidaHypothesis(self.graph_obj))
-                                          
             hypotheses_todo.append(core_hyp)
 
         # extend all hypotheses in the deque until they are done

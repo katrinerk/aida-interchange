@@ -1,3 +1,8 @@
+# Katrin Erk April 2019
+#
+# Class for filtering hypotheses for logical consistency
+# Rule-based filtering
+
 import sys
 
 class AidaHypothesisFilter:
