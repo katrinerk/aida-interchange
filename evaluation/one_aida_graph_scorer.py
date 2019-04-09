@@ -28,12 +28,14 @@ class AidaGraphScorer:
         modelhypo_goldhypo, goldhypo_covered = self._match(modelhypo_obj, hprefix = hprefix, hset = hset)
         
         ###
-        # For each model hypothesis, keep strict and lenient precisin and recall
-        # Keys are model hypothesis indices. 
+        # For each model hypothesis, keep strict and lenient precision and recall
+        # as well as percentage of statements that were conflicting with the gold hypothesis
+        # Keys are model hypothesis indices.
         strict_prec = { }
         strict_rec = { }
         lenient_prec = { }
         lenient_rec = { }
+        conflicting_perc = { }
         # for each model hypothesis, also keep records of which (core)
         # statements are correct or incorrect
         model_stmt_rating = { }
@@ -47,6 +49,7 @@ class AidaGraphScorer:
                 strict_rec[modelhypo_index ] = 0
                 lenient_prec[modelhypo_index] = 0
                 lenient_rec[modelhypo_index] = 0
+                conflicting_perc[ modelhypo_index ] = 0
 
             else:
                 
@@ -72,11 +75,19 @@ class AidaGraphScorer:
                 else:
                     lenient_rec[modelhypo_index] = 1
 
+                # conflicting statements
+                conflicting = set(modelhypo["statements"]).intersection(self.goldhypothesis[goldhypo].get("stmt_contradicting", set()))
+                if len(modelhypo["statements"]) > 0:
+                    conflicting_perc[modelhypo_index] = len(conflicting) / len(modelhypo["statements"])
+                else:
+                    conflicting_perc[modelhypo_index] = 0
+
                 model_stmt_rating[ modelhypo_index] = { "core_correct" : [],
                                                         "core_incorrect" : [],
                                                         "other_correct" : [],
                                                         "other_incorrect" : [],
-                                                        "missing" : []
+                                                        "missing" : [],
+                                                        "conflicting" : list(conflicting)
                                                        }
 
                 # core (query) statements
@@ -99,7 +110,12 @@ class AidaGraphScorer:
                 for stmtlabel in goldhypo_supported.difference(modelhypo["statements"]):
                     model_stmt_rating[modelhypo_index]["missing"].append(stmtlabel)
 
-        return (modelhypo_goldhypo, goldhypo_covered, strict_prec, strict_rec, lenient_prec, lenient_rec, model_stmt_rating)
+        return (modelhypo_goldhypo, goldhypo_covered,
+                    {"strict_prec" : strict_prec,
+                     "strict_rec" : strict_rec,
+                     "lenient_prec" : lenient_prec,
+                     "lenient_rec" : lenient_rec,
+                     "perc_conflicting" : conflicting_perc }, model_stmt_rating)
         
             
     # store info on all gold hypotheses in the AIDA graph object

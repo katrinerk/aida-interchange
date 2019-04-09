@@ -70,6 +70,9 @@ class AidaJson:
     def is_ere(self, nodelabel):
         return self.is_entity(nodelabel) or self.is_event(nodelabel) or self.is_relation(nodelabel)
 
+    def is_typestmt(self, nodelabel):
+        return self.is_statement(nodelabel) and self.thegraph[nodelabel]["predicate"] == "type"
+
     ###
     # given an ERE label, return labels of all adjacent statements
     # with the given predicate and where erelabel is an argument in the given ererole (subject, object)

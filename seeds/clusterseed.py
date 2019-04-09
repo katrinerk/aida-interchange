@@ -50,6 +50,9 @@ class OneClusterSeed:
     # finalize:
     # report failed queries ot the underlying AidaHypothesis object
     def finalize(self):
+
+        ## print("HIER qvar filler", self.qvar_filler)
+        ## input("hit enter...")
         self.hypothesis.add_failed_queries( list(map( lambda ix: self.core_constraints[ix], self.unfillable)) )
 
         return self.hypothesis
@@ -89,7 +92,10 @@ class OneClusterSeed:
                 continue
 
             # can this statement be added to the hypothesis without contradiction?
-            if self.filter.validate(self.hypothesis, stmtlabel):
+            # extended hypothesis
+            new_hypothesis = self.hypothesis.extend(stmtlabel, core = True)
+            
+            if self.filter.validate(new_hypothesis, stmtlabel):
                 # yes: make a new OneClusterSeed object with this extended hypothesis
 
                 # possible change to qvar_filler
@@ -104,11 +110,6 @@ class OneClusterSeed:
                 new_unfilled = self.unfilled.difference([nfc["index"]])
                 new_unfillable = self.unfillable.copy()
                 
-                # extended hypothesis
-                new_hypothesis = self.hypothesis.extend(stmtlabel, core = True)
-                # if new_hypothesis is None:
-                #    print("HIER none in oneclusterseed.extend")
-
                 retv.append(OneClusterSeed(self.graph_obj, self.core_constraints, new_hypothesis, 
                    new_qvar_filler, new_unfilled, new_unfillable))
                 

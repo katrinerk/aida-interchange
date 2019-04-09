@@ -51,7 +51,7 @@ score_obj = AidaGraphScorer(json_obj)
 ###
 # Analyze each model-generated hypothesis
 
-modelhypo_goldhypo, goldhypo_covered ,strict_prec, strict_rec, lenient_prec, lenient_rec, model_stmt_rating = score_obj.score(hypo_obj, hprefix = args.prefix)
+modelhypo_goldhypo, goldhypo_covered, scores, model_stmt_rating = score_obj.score(hypo_obj, hprefix = args.prefix)
 
 for modelhypo_index, modelhypo in enumerate(hypo_obj["support"]):
 
@@ -65,8 +65,8 @@ for modelhypo_index, modelhypo in enumerate(hypo_obj["support"]):
     
     # short output to stdout
     print("Model hypothesis", modelhypo_index, "p=", round(modelhypo_prob, 2), ", matched to gold", goldhypo, file = sys.stderr)
-    print("Strict Prec:", round(strict_prec[modelhypo_index], 3), "Rec:", round(strict_rec[modelhypo_index], 3), file = sys.stderr)
-    print("Lenient Prec:", round(lenient_prec[modelhypo_index], 3), "Rec:", round(lenient_rec[modelhypo_index], 3), "\n", file = sys.stderr)
+    print("Strict Prec:", round(scores["strict_prec"][modelhypo_index], 3), "Rec:", round(scores["strict_rec"][modelhypo_index], 3), file = sys.stderr)
+    print("Lenient Prec:", round(scores["lenient_prec"][modelhypo_index], 3), "Rec:", round(scores["lenient_rec"][modelhypo_index], 3), "\n", file = sys.stderr)
 
     # longer output to file
     outfilebase = args.outdir + "/hypo" + str(modelhypo_index)
@@ -74,8 +74,8 @@ for modelhypo_index, modelhypo in enumerate(hypo_obj["support"]):
         print("====================================", file = fout)
         print("Model hypothesis", modelhypo_index, "p=", round(modelhypo_prob, 2), ", matched to gold", goldhypo, file = fout)
         print("------------------------------------", file = fout)
-        print("Strict Prec:", round(strict_prec[modelhypo_index], 3), "Rec:", round(strict_rec[modelhypo_index], 3), file = fout)
-        print("Lenient Prec:", round(lenient_prec[modelhypo_index], 3), "Rec:", round(lenient_rec[modelhypo_index], 3), file = fout)
+        print("Strict Prec:", round(scores["strict_prec"][modelhypo_index], 3), "Rec:", round(scores["strict_rec"][modelhypo_index], 3), file = fout)
+        print("Lenient Prec:", round(scores["lenient_prec"][modelhypo_index], 3), "Rec:", round(scores["lenient_rec"][modelhypo_index], 3), file = fout)
         print("\n", file = fout)
 
         print("------------------------------------", file = fout)        
@@ -112,7 +112,7 @@ for modelhypo_index, modelhypo in enumerate(hypo_obj["support"]):
 
         
 print("===========", file = sys.stderr)
-print("Macro-average Strict  Prec:", round(sum(strict_prec.values()) / len(strict_prec.values()), 3), "Rec:", round(sum(strict_rec.values()) / len(strict_rec.values()), 3))
-print("Macro-average Lenient Prec:", round(sum(lenient_prec.values()) / len(lenient_prec.values()), 3), "Rec:", round(sum(lenient_rec.values()) / len(lenient_rec.values()), 3))
+print("Macro-average Strict  Prec:", round(sum(scores["strict_prec"].values()) / len(scores["strict_prec"].values()), 3), "Rec:", round(sum(scores["strict_rec"].values()) / len(scores["strict_rec"].values()), 3))
+print("Macro-average Lenient Prec:", round(sum(scores["lenient_prec"].values()) / len(scores["lenient_prec"].values()), 3), "Rec:", round(sum(scores["lenient_rec"].values()) / len(scores["lenient_rec"].values()), 3))
 print("Coverage in percentage of gold hypotheses:", round(len(goldhypo_covered) / score_obj.num_gold_hypotheses(hprefix = args.prefix), 3))
 print("Gold hypotheses covered:", ", ".join(list(goldhypo_covered)))

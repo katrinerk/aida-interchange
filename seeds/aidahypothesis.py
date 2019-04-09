@@ -164,9 +164,16 @@ class AidaHypothesis:
         return list(set(nodelabel for stmtlabel in self.stmts for nodelabel in self.graph_obj.statement_args(stmtlabel) \
                         if self.graph_obj.is_ere(nodelabel)))
 
+    def eres_of_stmt(self, stmtlabel):
+        if stmtlabel not in self.stmts:
+            return [ ]
+        else:
+            return list(set(nodelabel for nodelabel in self.graph_obj.statement_args(stmtlabel) \
+                        if self.graph_obj.is_ere(nodelabel)))
+
 
     # iterate over arguments of an event or relation in this hypothesis
-    # yield pairs of (argument label, ERE ID
+    # yield pairs of (argument label, ERE ID)
     def eventrelation_each_argument(self, eventrel_id):
         if not (self.graph_obj.is_event(eventrel_id) or self.graph_obj.is_relation(eventrel_id)):
             return
@@ -176,6 +183,11 @@ class AidaHypothesis:
                 stmt = self.graph_obj.thegraph[stmtlabel]
                 if stmt["subject"] == eventrel_id and self.graph_obj.is_ere(stmt["object"]):
                     yield (stmt["predicate"], stmt["object"])
+
+    def eventrelation_each_argument_labeled(self, eventrel_id, rolelabel):
+        for thisrolelabel, filler in self.eventrelation_each_argument(eventrel_id):
+            if thisrolelabel == rolelabel:
+                yield filler
             
 
     # types of an ERE node in this hypothesis
@@ -199,6 +211,32 @@ class AidaHypothesis:
     def entity_names(self, ere_id):
         return self.graph_obj.english_names(self.graph_obj.ere_names(ere_id))
 
+
+    # possible affiliations of an ERE:
+    # yield ERE that is the affiliation
+    def ere_each_possible_affiliation(self, ere_id):
+        # go through possible affiliation statements where this ERE is the object
+        for stmtlabel in self.graph_obj.each_ere_adjacent_stmt(ere_id, "GeneralAffiliation.APORA_Affiliate", "object"):
+            rel_id = self.graph_obj.thegraph[stmtlabel]["subject"]
+            for otherstmtlabel in self.graph_obj.each_ere_adjacent_stmt(rel_id, "GeneralAffiliation.APORA_Affiliation", "subject"):
+                affiliation_id = self.graph_obj.thegraph[otherstmtlabel]["object"]
+                yield affiliation_id
+
+    # actual affiliations of an ERE in this hypothesis
+    def ere_each_affiliation(self, ere_id):
+        # go through possible affiliation statements where this ERE is the object
+        for stmtlabel in self.graph_obj.each_ere_adjacent_stmt(ere_id, "GeneralAffiliation.APORA_Affiliate", "object"):
+            if stmtlabel not in self.stmts:
+                continue
+            
+            rel_id = self.graph_obj.thegraph[stmtlabel]["subject"]
+            for otherstmtlabel in self.graph_obj.each_ere_adjacent_stmt(rel_id, "GeneralAffiliation.APORA_Affiliation", "subject"):
+                if otherstmtlabel not in self.stmts:
+                    continue
+                
+                affiliation_id = self.graph_obj.thegraph[otherstmtlabel]["object"]
+                yield affiliation_id
+                
 ############3
 # collection of hypotheses, after initial cluster seed generation has been done
 class AidaHypothesisCollection:
