@@ -316,7 +316,24 @@ class AidaGraph(RDFGraph):
             starts = list(set(self.get_node_objs(jlabel, "startOffset")))
             ends = list(set(self.get_node_objs(jlabel, "endOffsetInclusive")))
             yield ({"source": sources, "startOffset":starts, "endOffsetInclusive":ends})
-                
+
+    def times_associated_with(self, nodelabel):
+        if not self.has_node(nodelabel) or \
+                not self.get_node(nodelabel).is_event():
+            return
+
+        for tlabel in self.get_node_objs(nodelabel, "ldcTime"):
+            yield {"start" : [ self._time_struct(tstart) for tstart in self.get_node_objs(tlabel, "start")],
+                   "end" : [ self._time_struct(tend) for tend in self.get_node_objs(tlabel, "end")]}
+            
+
+    # given an LDCTimeComponent, parse out its pieces
+    def _time_struct(self, nodelabel):
+        return { "timeType" : list(set(self.get_node_objs(nodelabel, "timeType", shorten=True))),
+                  "day" : list(set(self.get_node_objs(nodelabel, "day", shorten=True))),
+                  "month" : list(set(self.get_node_objs(nodelabel, "month", shorten=True))),
+                  "year" : list(set(self.get_node_objs(nodelabel, "year", shorten=True)))}
+    
     # iterator over source document ids associate with a typing statement,
     # this handles both source document information from the statement node,
     # as well as from the subject ERE node (for RPI data)

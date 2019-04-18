@@ -109,7 +109,12 @@ class JsonInterface:
                 enames = list(set(self.mygraph.names_of_ere(node.name)))
                 if len(enames) > 0:
                     self.json_obj["theGraph"][node.name]["name"] = enames
-                    
+
+                # temporal information (for events)
+                temporal = list(self.mygraph.times_associated_with(node.name))
+                if len(temporal) > 0:
+                    self.json_obj["theGraph"][node.name]["ldcTime"] = temporal
+
                 self.ere_counter += 1
                 self.json_obj["ere"].append(node.name)
                 
