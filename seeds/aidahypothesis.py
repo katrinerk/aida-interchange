@@ -236,7 +236,12 @@ class AidaHypothesis:
                 
                 affiliation_id = self.graph_obj.thegraph[otherstmtlabel]["object"]
                 yield affiliation_id
-                
+
+    # is this ERE listed as an affiliation, though not necessarily in this hypothesis?
+    def ere_possibly_isaffiliation(self, ere_id):
+        if len(list(self.graph_obj.each_ere_adjacent_stmt(ere_id, "GeneralAffiliation.APORA_Affiliation", "object"))) > 0:
+            return True
+        
 ############3
 # collection of hypotheses, after initial cluster seed generation has been done
 class AidaHypothesisCollection:

@@ -51,8 +51,7 @@ class OneClusterSeed:
     # report failed queries ot the underlying AidaHypothesis object
     def finalize(self):
 
-        ## print("HIER qvar filler", self.qvar_filler)
-        ## input("hit enter...")
+        # print("HIER qvar filler", self.qvar_filler)
         self.hypothesis.add_failed_queries( list(map( lambda ix: self.core_constraints[ix], self.unfillable)) )
 
         return self.hypothesis

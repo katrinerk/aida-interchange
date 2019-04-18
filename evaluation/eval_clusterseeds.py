@@ -97,8 +97,15 @@ for graph_name in graph_soin.keys():
         # and evaluate
         modelhypo_goldhypo, goldhypo_covered, scores, model_stmt_rating = score_obj.score(hypo_json, hset = soin_obj["queries"])
 
+        ## # output of individual hypotheses
+        ## for h in hypo_json["support"]:
+        ##     h_obj = AidaHypothesis(graph_obj, h["statements"])
+        ##     print(h_obj.to_s(), "\n\n")
+        ## input("hit enter")
+            
         # print out evaluation results
         print("===== ", ", ".join(soin_obj["queries"]), "===")
+        print("#hypotheses:", len(hypo_json["support"]))
         print("Macro-average Strict Prec:", round(sum(scores["strict_prec"].values()) / len(scores["strict_prec"].values()), 3),
                   "Rec:", round(sum(scores["strict_rec"].values()) / len(scores["strict_rec"].values()), 3))
         print("Macro-average Lenient Prec:", round(sum(scores["lenient_prec"].values()) / len(scores["lenient_prec"].values()), 3), "Rec:", round(sum(scores["lenient_rec"].values()) / len(scores["lenient_rec"].values()), 3))

@@ -20,7 +20,10 @@ class AidaHypothesisFilter:
     # All attackers in a conflict.attack event need to have one possible affiliation in common,
     # also all instruments,
     # and all attackers and instruments
-    # (if there is no known affiliation that is also okay)
+    # (if there is no known affiliation that is also okay).
+    # Entities that are possible affiliates of any affiliation relation
+    # are counted as their own affiliates.
+    # For example, Ukraine counts as being affiliated with Ukraine.
     def event_attack_attacker_instrument_compatible(self, hypothesis, ere_id):
         # Is this a Conflict.Attack event?
         if not self.graph_obj.is_event(ere_id): return True
@@ -39,6 +42,7 @@ class AidaHypothesisFilter:
             return False
         
         if attacker_affiliations_intersect is not None and instrument_affiliations_intersect is not None and len(attacker_affiliations_intersect.intersection(instrument_affiliations_intersect)) == 0:
+            # print("no intersection betwen attacker and instrument affiliations", attacker_affiliations_intersect, instrument_affiliations_intersect)
             return False
 
         return True
@@ -57,9 +61,9 @@ class AidaHypothesisFilter:
         for ere_id in hypothesis.eres_of_stmt(stmt):
             for test in tests:
                 if not test(hypothesis, ere_id):
-                    print("HIER hypothesis rejected esp", stmt)
-                    print(hypothesis.to_s())
-                    input("Press enter")
+                    ## print("HIER hypothesis rejected esp", stmt)
+                    ## print(hypothesis.to_s())
+                    ## input("Press enter")
                     return False
                 
         return True
@@ -74,6 +78,8 @@ class AidaHypothesisFilter:
         
         for ere_id in ere_ids:
             these_affiliations = set(hypothesis.ere_each_possible_affiliation(ere_id))
+            if hypothesis.ere_possibly_isaffiliation(ere_id):
+                these_affiliations.add(ere_id)
             if len(these_affiliations) > 0:
                 if affiliations is None:
                     affiliations = these_affiliations
