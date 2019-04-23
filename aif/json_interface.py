@@ -117,6 +117,12 @@ class JsonInterface:
 
                 self.ere_counter += 1
                 self.json_obj["ere"].append(node.name)
+
+                # record justification
+                self.json_just_obj[node.name] = [ ]
+                textjustifications = list(self.mygraph.sources_and_textjust_associated_with(node.name))
+                if len(textjustifications) > 0:
+                    self.json_just_obj[node.name] = textjustifications                
                 
             # node describing a cluster: has a prototypical member
             elif node.is_sameas_cluster():

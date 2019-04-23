@@ -307,8 +307,7 @@ class AidaGraph(RDFGraph):
     # yields one tuple (sources, startOffsets, endOffsetsInclusive) for each justifiedBy
     # where sources, startOffsets, endOffsetsInclusive are lists
     def sources_and_textjust_associated_with(self, nodelabel):
-        if not self.has_node(nodelabel) or \
-                not self.get_node(nodelabel).is_statement():
+        if not self.has_node(nodelabel):
             return
 
         for jlabel in self.get_node_objs(nodelabel, "justifiedBy"):
