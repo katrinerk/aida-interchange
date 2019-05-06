@@ -333,7 +333,7 @@ class AidaGraph(RDFGraph):
                   "month" : list(set(self.get_node_objs(nodelabel, "month", shorten=True))),
                   "year" : list(set(self.get_node_objs(nodelabel, "year", shorten=True))),
                   "hour" : list(set(self.get_node_objs(nodelabel, "hour", shorten=True))),
-                  "minute": list(set(self.get_node_objs(nodelabel, "minute", shorten=True)))}                   }
+                  "minute": list(set(self.get_node_objs(nodelabel, "minute", shorten=True)))                      }
     
     # iterator over source document ids associate with a typing statement,
     # this handles both source document information from the statement node,

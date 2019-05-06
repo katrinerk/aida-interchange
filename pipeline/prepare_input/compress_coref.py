@@ -8,10 +8,10 @@
 # statements correspond to which reduced ones
 #
 # usage:
-# python3 coref.py <aidagraph.json> <aidaquery.json>
-# <aidagraph_output.json> <aidaquery_output.json> <coref_log.json>
+# python3 coref.py <aidagraph.json> 
+# <aidagraph_output.json> <coref_log.json>
 #
-# writes new aidagraph_output.json, aidaquery_output.json.
+# writes new aidagraph_output.json
 
 import sys
 import json
@@ -65,12 +65,8 @@ def get_newstmt_label(oldstmt, ereunif, the_graph, oldstmt_newstmt):
 parser = ArgumentParser()
 parser.add_argument('input_aidagraph',
                     help='path to input aidagraph.json file')
-parser.add_argument('input_aidaquery',
-                    help='path to input aidaquery.json file')
 parser.add_argument('output_aidagraph',
                     help='path to output aidagraph.json file')
-parser.add_argument('output_aidaquery',
-                    help='path to output aidaquery.json file')
 parser.add_argument('output_coref_log',
                     help='path to output coref_log.json file')
 
@@ -78,9 +74,6 @@ args = parser.parse_args()
 
 with open(args.input_aidagraph, 'r') as fin:
     json_in = json.load(fin)
-
-with open(args.input_aidaquery, 'r') as fin:
-    json_query_in = json.load(fin)
 
 
 # this is going to be the new aidagraph.json
@@ -262,42 +255,6 @@ for stmt1, prox1 in json_in["statementProximity"].items():
     
 json_out["statementProximity"] = proximities
 
-###############
-# update the query file
-
-json_query_out  = { }
-json_query_out["parameters"] = json_query_in["parameters"]
-json_query_out["numSamples"]= json_query_in["numSamples"]
-json_query_out["memberProb"] = json_query_in["memberProb"]
-json_query_out["entrypoints"] = [ ]
-
-for ep in json_query_in["entrypoints"]:
-    newep = { }
-    newere = set()
-    for ere in ep["ere"]:
-        newere.add(ereunif.get(ere, ere))
-
-    newep["ere"] = list(newere)
-
-    newstmt = set()
-    for stmt in ep["statements"]:
-        label = get_newstmt_label(stmt, ereunif, json_in["theGraph"], oldstmt_newstmt)
-        if label is not None:
-            newstmt.add(label)
-
-    newep["statements"] = list(newstmt)
-
-    newep["queryConstraints"] = [ ]
-
-    for qc in ep["queryConstraints"]:
-        subj = ereunif.get(qc[0], qc[0])
-        pred = qc[1]
-        obj = ereunif.get(qc[2], qc[2])
-
-        newep["queryConstraints"].append([ subj, pred, obj])
-
-    json_query_out["entrypoints"].append(newep)
-
 
 ################
 # write output
@@ -308,5 +265,3 @@ with open(args.output_coref_log, "w") as fout:
 with open(args.output_aidagraph, "w") as fout:
     json.dump(json_out, fout, indent = 1)
 
-with open(args.output_aidaquery, "w") as fout:
-    json.dump(json_query_out, fout, indent = 1)
