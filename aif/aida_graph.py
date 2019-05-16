@@ -316,6 +316,103 @@ class AidaGraph(RDFGraph):
             ends = list(set(self.get_node_objs(jlabel, "endOffsetInclusive")))
             yield ({"source": sources, "startOffset":starts, "endOffsetInclusive":ends})
 
+    # iterator over justifications associated with a statement node
+    # forms:
+    ## aida:justifiedBy [ a SEEBELOW
+    ##                         aida:source              "HC00002ZT" ;
+    ##                         aida:sourceDocument      "IC0011TIB" ;
+    ##                         aida:confidence [...];
+    ##                         aida:system          ldc:LDCModelGenerator
+    ## ];
+    ##
+    ###########
+    ## what the SEEBELOW can be:
+    ## aida:justifiedBy [ a aida:TextJustification ;
+    ##                   aidaEndOffsetInclusive "410"^^xsd:int ;
+    ##                         aida:startOffset         "405"^^xsd:int
+    ## ];
+    ## aida:justifiedBy  [ a                    aida:ImageJustification ;
+    ##                         aida:boundingBox     [ a                            aida:BoundingBox ;
+    ##                                                aida:boundingBoxLowerRightX  "1"^^xsd:int ;
+    ##                                                aida:boundingBoxLowerRightY  "1"^^xsd:int ;
+    ##                                                aida:boundingBoxUpperLeftX   "0"^^xsd:int ;
+    ##                                                aida:boundingBoxUpperLeftY   "0"^^xsd:int
+    ##                                              ] ;
+    ##                       ] ;
+    ## aida:justifiedBy  [ a                    aida:KeyFrameVideoJustification ;
+    ##                         aida:boundingBox     [ a                            aida:BoundingBox ;
+    ##                                                aida:boundingBoxLowerRightX  "1"^^xsd:int ;
+    ##                                                aida:boundingBoxLowerRightY  "1"^^xsd:int ;
+    ##                                                aida:boundingBoxUpperLeftX   "0"^^xsd:int ;
+    ##                                                aida:boundingBoxUpperLeftY   "0"^^xsd:int
+    ##                                              ] ;
+    ##                         aida:keyFrame        "fakeKeyFrame" ;
+    ##                       ] ;
+    ##
+    ###########
+    ## BUT THEN THERE IS ALSO:
+    ## aida:justifiedBy  [ a                            aida:CompoundJustification ;
+    ##                         aida:confidence [...];
+    ##                         aida:containedJustification  [ ANYTHING AS DESCRIBED ABOVE ]; 
+    ##                         aida:system                  ldc:LDCModelGenerator
+    ##                       ] ;
+    def justifications_associated_with(self, nodelabel):
+        if not self.has_node(nodelabel):
+            return
+        
+        for jlabel in self.get_node_objs(nodelabel, "justifiedBy"):
+            node = self.get_node(jlabel)
+            if node.has_type("CompoundJustification", shorten=True):
+                for jlabel2 in self.get_node_objs(jlabel, "containedJustification"):
+                    retv = self._noncompound_justification(jlabel2)
+                    if retv is not None: yield retv
+            else:
+                # not a compound justification
+                retv = self._noncompound_justification(jlabel)
+                if retv is not None: yield retv
+
+    def _noncompound_justification(self, jlabel):
+        # sources
+        sources = list(set(self.get_node_objs(jlabel, "source")))
+        source_documents = list(set(self.get_node_objs(jlabel, "sourceDocument")))
+        node = self.get_node(jlabel)
+        # type
+        if node.has_type("TextJustification"):
+            jtype = "TextJustification"
+        elif node.has_type("ImageJustification"):
+            jtype = "ImageJustification"
+        elif node.has_type("KeyFrameVideoJustification"):
+            jtype = "KeyFrameVideoJustification"
+        else:
+            jtype = None
+        # location
+        if jtype == "TextJustification":
+            starts = list(set(self.get_node_objs(jlabel, "startOffset")))
+            ends = list(set(self.get_node_objs(jlabel, "endOffsetInclusive")))
+            return {"source": sources, "sourceDocument": source_documents, "startOffset":starts, "endOffsetInclusive":ends, "type" : jtype}
+        elif jtype == "ImageJustification":
+            bboxes = list(self._boundingboxes(jlabel))
+            return {"source": sources, "sourceDocument": source_documents, "boundingBox": bboxes, "type" : jtype}
+        elif jtype == "KeyFrameVideoJustification":
+            bboxes = list(self._boundingboxes(jlabel))
+            keyframes = list(set(self.get_node_objs(jlabel, "keyFrame")))
+            return {"source": sources, "sourceDocument": source_documents, "boundingBox": bboxes, "keyFrame" : keyframes, "type" : jtype}
+
+        return None
+            
+
+    def _boundingboxes(self, jlabel):
+        for blabel in self.get_node_objs(jlabel, "boundingBox"):
+            boundingBoxLowerRightX = list(set(self.get_node_objs(blabel, "boundingBoxLowerRightX")))
+            boundingBoxLowerRightY = list(set(self.get_node_objs(blabel, "boundingBoxLowerRightY")))
+            boundingBoxUpperLeftX = list(set(self.get_node_objs(blabel, "boundingBoxUpperLeftX")))
+            boundingBoxUpperLeftY = list(set(self.get_node_objs(blabel, "boundingBoxUpperLeftY")))
+            yield {"boundingBoxLowerRightX" : boundingBoxLowerRightX, "boundingBoxLowerRightY" : boundingBoxLowerRightY,
+                       "boundingBoxUpperLeftX" : boundingBoxUpperLeftX, "boundingBoxUpperLeftY" : boundingBoxUpperLeftY}
+            
+            
+        return [ ]
+
     def times_associated_with(self, nodelabel):
         if not self.has_node(nodelabel) or \
                 not self.get_node(nodelabel).is_event():
@@ -328,12 +425,40 @@ class AidaGraph(RDFGraph):
 
     # given an LDCTimeComponent, parse out its pieces
     def _time_struct(self, nodelabel):
-        return { "timeType" : list(set(self.get_node_objs(nodelabel, "timeType", shorten=True))),
-                  "day" : list(set(self.get_node_objs(nodelabel, "day", shorten=True))),
-                  "month" : list(set(self.get_node_objs(nodelabel, "month", shorten=True))),
-                  "year" : list(set(self.get_node_objs(nodelabel, "year", shorten=True))),
-                  "hour" : list(set(self.get_node_objs(nodelabel, "hour", shorten=True))),
-                  "minute": list(set(self.get_node_objs(nodelabel, "minute", shorten=True)))                      }
+        retv = {"timeType" : list(set(self.get_node_objs(nodelabel, "timeType", shorten=True)))}
+        for piece in ["year", "month", "day", "hour", "minute"]:
+            strs = (self._parse_xsddate(s, piece) for s in self.get_node_objs(nodelabel, piece))
+            strs_filtered = list(set(s for s in strs if s is not None))
+            if len(strs_filtered) > 0:
+                retv[piece] = strs_filtered
+        return retv
+
+    # parsing out pieces of dates by hand, as I cannot find any tool that will do this
+    def _parse_xsddate(self, value, whichpiece):
+        if whichpiece == "year":
+            extract = str(value).split("-")[0]
+            if extract.isdigit():
+                return int(extract)
+            else:
+                return None
+        elif whichpiece == "month":
+            if not(value.startswith("--")):
+                return None
+            if not value[2:].isdigit():
+                return None
+            return int(value[2:])
+        elif whichpiece == "day":
+            if not(value.startswith("---")):
+                return None
+            if not value[3:].isdigit():
+                return None
+            return int(value[3:])
+        else:
+            if not value.isdigit():
+                return None
+            return int(value)
+
+            
     
     # iterator over source document ids associate with a typing statement,
     # this handles both source document information from the statement node,

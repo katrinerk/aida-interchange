@@ -119,10 +119,9 @@ class JsonInterface:
                 self.json_obj["ere"].append(node.name)
 
                 # record justification
-                self.json_just_obj[node.name] = [ ]
-                textjustifications = list(self.mygraph.sources_and_textjust_associated_with(node.name))
-                if len(textjustifications) > 0:
-                    self.json_just_obj[node.name] = textjustifications                
+                this_justification = self.get_justification(node)
+                if len(this_justification) > 0:
+                    self.json_just_obj[node.name] = this_justification
                 
             # node describing a cluster: has a prototypical member
             elif node.is_sameas_cluster():
@@ -212,10 +211,10 @@ class JsonInterface:
 
                 # record justification
                 if wellformed:
-                    self.json_just_obj[node.name] = [ ]
-                    textjustifications = list(self.mygraph.sources_and_textjust_associated_with(node.name))
-                    if len(textjustifications) > 0:
-                        self.json_just_obj[node.name] = textjustifications
+                    this_justification = self.get_justification(node)
+                    if len(this_justification) > 0:
+                        self.json_just_obj[node.name] = this_justification
+                    
                     
 
         ## # replace labels by label indices in adjacency statements
@@ -496,3 +495,12 @@ class JsonInterface:
             for key in self.json_obj["theGraph"].keys():
                 if self.json_obj["theGraph"][key]["type"] == "ClusterMember" and key not in keep_coref_stmt:
                     del self.json_obj["theGraph"][key]
+
+    def get_justification(self, node):
+        return list(self.mygraph.justifications_associated_with(node.name))
+
+        ## self.json_just_obj[node.name] = [ ]
+        ## textjustifications = list(self.mygraph.sources_and_textjust_associated_with(node.name))
+        ## if len(textjustifications) > 0:
+        ##     self.json_just_obj[node.name] = textjustifications                
+                    
