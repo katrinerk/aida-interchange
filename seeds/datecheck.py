@@ -6,14 +6,18 @@ import datetime
 class AidaIncompleteDate:
     def __init__(self, year, month, day):
         if year is not None and not isinstance(year, int):
-            print("unexpected type for year", type(year))
+            if not(isinstance(year, str) and year.strip("X") == ""):
+                print("unexpected type for year", type(year))
             year = None
             
         if month is not None and not isinstance(month, int):
-            print("unexpected type for year", type(month))
+            if not(isinstance(month, str) and month.strip("X") == ""):
+                print("unexpected type for month", type(month))
             month = None
+            
         if day is not None and not isinstance(day, int):
-            print("unexpected type for year", type(day))
+            if not(isinstance(day, str) and day.strip("X") == ""):
+                print("unexpected type for day", type(day))
             day = None
             
         self.year = year
@@ -40,7 +44,6 @@ class AidaIncompleteDate:
     def last_day_of_month(self):
         if self.day is None:
             return False
-        
 
         testdate = self.to_python_date()
         testdate2 = self.to_python_date() + datetime.timedelta(1)
@@ -71,6 +74,7 @@ class AidaIncompleteDate:
     def is_before(self, date2, add_a_day = False):
         if add_a_day:
             date2 = date2.add_day()
+        print("HIERbefore", self.year, self.month, self.day, date2.year, date2.month, date2.day)
         
         if self.year is None or date2.year is None:
             # we don't know which year one of the dates given is:
@@ -87,7 +91,6 @@ class AidaIncompleteDate:
 
         ###
         # same year, move on to month
-        
         if self.month is None and date2.month is None:
             # we don't know the month in either, so t1 can always be before t2
             return True
@@ -101,11 +104,18 @@ class AidaIncompleteDate:
             return True
         
         elif self.month is not None and date2.month is not None and self.month < date2.month: 
-            # t1 earlier month than t2
+            # t1 earlier month than t2, so definitely before
             return True
+
+        elif self.month is not None and date2.month is not None and self.month > date2.month:
+            # t1 later month than t2, so definitely not before
+            return False
 
         ###
         # we need to compare days
+
+        if self.day is None and date2.day is None:
+            return True
         
         if self.day is not None and date2.day is not None and self.day < date2.day:
             return True
@@ -139,6 +149,7 @@ class AidaIncompleteDate:
             if newself.is_eq(date2):
                 return True
 
+        print("HIEReq", self.year, self.month, self.day, date2.year, date2.month, date2.day)            
         
         # try exact match
         if self.year is not None and date2.year is not None and self.year != date2.year:

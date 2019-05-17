@@ -12,7 +12,7 @@ import sys
 ########3
 # one AIDA hypothesis
 class AidaHypothesis:
-    def __init__(self, graph_obj, stmts = None, core_stmts = None):
+    def __init__(self, graph_obj, stmts = None, core_stmts = None, lweight = 0.0):
         self.graph_obj = graph_obj
         if stmts is None:
             self.stmts = set()
@@ -26,6 +26,9 @@ class AidaHypothesis:
 
         # failed queries are added from outside, as they are needed in the json object
         self.failed_queries = [ ]
+
+        # hypothesis weight
+        self.lweight = lweight
 
     #####
     # extending a hypothesis: adding a statement outright,
@@ -63,6 +66,10 @@ class AidaHypothesis:
 
     def add_failed_queries(self, failed_queries):
         self.failed_queries = failed_queries
+
+    # update the log weight 
+    def update_lweight(self, added_lweight):
+        self.lweight += added_lweight
     
     ########
     # readable output: return EREs in this hypothesis, and the statements associated with them
@@ -253,7 +260,7 @@ class AidaHypothesisCollection:
        
         # make a json in the right format.
         # entries: "probs", "support". "probs": add dummy uniform probabilities
-        json_out = { "probs": [ 1.0 / len(self.hypotheses) ] * len(self.hypotheses),
+        json_out = { "probs": [h.lweight for h in self.hypotheses],
                      "support" : [ ]
                    }
         for hyp in self.hypotheses:

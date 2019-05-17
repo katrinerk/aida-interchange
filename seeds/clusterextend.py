@@ -43,3 +43,6 @@ class ClusterExpansion:
                     hypothesis.add_stmt(stmtlabel)
 
  
+
+    def hypotheses(self):
+        return self.hypothesis_obj.hypotheses

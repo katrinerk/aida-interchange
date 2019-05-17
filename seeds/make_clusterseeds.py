@@ -48,11 +48,12 @@ with open(outfilename, "w") as fout:
 
 
 # write out hypotheses to stdout, to test readable output
-## for hyp in hypothesis_obj.to_s()[:10]:
-##     print("\n\nhypothesis\n")
-##     print(hyp)
-##     print("\n\n")
-##     input("press enter...")
+for hyp in hypothesis_obj.hypotheses()[:10]:
+    print("\n\nhypothesis\n")
+    print("log weight", hyp.lweight, "\n")
+    print(hyp.to_s())
+    print("\n\n")
+    input("press enter...")
 
 # analysis of hypotheses
 json_struct = hypothesis_obj.to_json()

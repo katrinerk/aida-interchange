@@ -23,7 +23,7 @@ from seeds.datecheck import AidaIncompleteDate, temporal_constraint_match
 # class that holds a single cluster seed.
 # just a data structure, doesn't do much.
 class OneClusterSeed:
-    def __init__(self, graph_obj, core_constraints, temporal_constraints, hypothesis, 
+    def __init__(self, graph_obj, core_constraints, temporal_constraints, hypothesis, lweight = 0.0,
                      qvar_filler = None, unfilled = None, unfillable = None):
         # the following data is not changed, and is kept just for info
         self.graph_obj = graph_obj
@@ -33,6 +33,9 @@ class OneClusterSeed:
         # the following data is changed.
         # flags: am I done?
         self.done = False
+
+        # what is my current log weight?
+        self.lweight = lweight
         
         # hypothesis is an AidaHypothesis object
         self.hypothesis = hypothesis
@@ -51,11 +54,16 @@ class OneClusterSeed:
         if unfillable is None: self.unfillable = set()
         else: self.unfillable = unfillable
 
+        # some weights
+        self.FAILED_QUERY_WT = -0.5
+        self.FAILED_TEMPORAL = -0.5
+
     # finalize:
     # report failed queries ot the underlying AidaHypothesis object
     def finalize(self):
 
         self.hypothesis.add_failed_queries( list(map( lambda ix: self.core_constraints[ix], self.unfillable)) )
+        self.hypothesis.update_lweight(self.lweight)
 
         return self.hypothesis
             
@@ -84,6 +92,8 @@ class OneClusterSeed:
             # something has gone wrong
             self.unfilled.remove(nfc["index"])
             self.unfillable.add(nfc["index"])
+            # update the weight
+            self.lweight += self.FAILED_QUERY_WT
             return [self ]
 
         # determine the constraint that we are matching
@@ -102,7 +112,7 @@ class OneClusterSeed:
                 new_unfilled = self.unfilled.difference([nfc["index"]])
                 new_unfillable = self.unfillable.copy()
 
-                retv.append(OneClusterSeed(self.graph_obj, self.core_constraints, self.temporal_constraints, new_hypothesis, 
+                retv.append(OneClusterSeed(self.graph_obj, self.core_constraints, self.temporal_constraints, new_hypothesis, self.lweight, 
                        new_qvar_filler, new_unfilled, new_unfillable))
                 
 
@@ -110,6 +120,8 @@ class OneClusterSeed:
             # all the fillers were filtered away
             self.unfilled.remove(nfc["index"])
             self.unfillable.add(nfc["index"])
+            # update the weight
+            self.lweight += self.FAILED_QUERY_WT
             return  [ self ]
         else:
             return retv
@@ -193,11 +205,16 @@ class OneClusterSeed:
         # make a new hypothesis for each statement that could fill the current constraint.
         # if we don't find anything, re-run with more leeway on temporal constraints
         retv, has_temporal_constraint = self._extend_withvariable(nfc, 0)
-        # HIER
         if len(retv) == 0 and has_temporal_constraint:
-           retv, has_temporal_constraint = self._extend_withvariable(nfc, 1)
-        ## if len(retv) == 0 and has_temporal_cosntraint:
-        ##     retv, has_temporal_constraint = self._extend_withvariable(nfc, 2)
+            # relax temporal matching by one day
+            # update weight to reflect relaxing of temporal constraint
+            self.lweight += self.FAILED_TEMPORAL
+            retv, has_temporal_constraint = self._extend_withvariable(nfc, 1)
+            
+        if len(retv) == 0 and has_temporal_constraint:
+            # relax temporal matching: everything goes
+            self.lweight += self.FAILED_TEMPORAL
+            retv, has_temporal_constraint = self._extend_withvariable(nfc, 2)
         
         return retv
 
@@ -208,7 +225,7 @@ class OneClusterSeed:
     # and has_temporal_constraint is true if there was at least one temporal constraint that didn't get matched
     def _extend_withvariable(self, nfc, leeway = 0):
 
-        print("HIER leeway", leeway)
+        # print("HIER leeway", leeway)
         retv = [ ]
         has_temporal_constraint = False
         
@@ -287,7 +304,7 @@ class ClusterSeeds:
         for facet_index, facet in enumerate(self.soin_obj["facets"]):
 
             # start a new hypothesis
-            core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), AidaHypothesis(self.graph_obj))
+            core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), AidaHypothesis(self.graph_obj), lweight = 0.0)
             hypotheses_todo.append(core_hyp)
 
         # extend all hypotheses in the deque until they are done
