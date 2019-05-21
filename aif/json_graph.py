@@ -11,6 +11,8 @@ class AidaJson:
     def __init__(self, json_obj):
         self.json_obj = json_obj
         self.thegraph = json_obj["theGraph"]
+        # make a set of all string constants that appear as statement arguments
+        self.string_constants_of_graph = set(self._each_string_constant_of_graph())
 
     ###############################
 
@@ -295,3 +297,10 @@ class AidaJson:
         return label.split("/")[-1].split("#")[-1]
 
     
+    ##
+    # string constants in this graph: they always appear as objects in statements
+    def _each_string_constant_of_graph(self):
+        for stmtlabel, stmtnode in self.each_statement():
+            if stmtnode["object"] not in self.thegraph:
+                yield stmtnode["object"]
+                yield self.shorten_label(stmtnode["object"])

@@ -7,6 +7,7 @@
 import sys
 from collections import deque
 import datetime
+import math
 
 
 from os.path import dirname, realpath
@@ -64,6 +65,7 @@ class OneClusterSeed:
 
         self.hypothesis.add_failed_queries( list(map( lambda ix: self.core_constraints[ix], self.unfillable)) )
         self.hypothesis.update_lweight(self.lweight)
+        self.hypothesis.add_qvar_filler(self.qvar_filler)
 
         return self.hypothesis
             
@@ -147,6 +149,7 @@ class OneClusterSeed:
                 else:
                     knownere = None
 
+
                 if knownere is not None:
                     # we do seem to have a fillable constraint
                     # what are the statements that could fill it?
@@ -180,7 +183,7 @@ class OneClusterSeed:
     # find statements that match this constraint, and
     # return a list of triples; (extended hypothesis, query_variable, filler)
     def _extend(self, nfc):
-        
+
         if len(nfc["stmt"]) == 0:
             # did not find any matches to this constraint
             return [ ]
@@ -197,7 +200,6 @@ class OneClusterSeed:
                 # can this statement be added to the hypothesis without contradiction?
                 # extended hypothesis
                 return [ (self.hypothesis.extend(stmtlabel, core = True), stmtlabel, None, None)]
-
 
         # we know that we have a variable now.
         # it is in nfc["variable"]
@@ -240,16 +242,18 @@ class OneClusterSeed:
                 print("Error in ClusterSeed: unexpectedly did not find statement", stmtlabel)
                 continue
 
-            # determine the entity that fills the role that has the variable
+            # determine the entity or value that fills the role that has the variable
             filler = self.graph_obj.thegraph[stmtlabel][otherrole]
 
-            # is there a problem with a temporal constraint?
-            if not temporal_constraint_match(self.graph_obj.thegraph[filler], self.temporal_constraints.get(nfc["variable"], None), leeway):
-                # yup, this filler runs afoul of some temporal constraint.
-                # do not use it
-                print("temp mismatch")
-                has_temporal_constraint = True
-                continue
+            # is this an entity? if so, we need to check for temporal constraints.
+            if filler in self.graph_obj.thegraph:
+                # is there a problem with a temporal constraint?
+                if not temporal_constraint_match(self.graph_obj.thegraph[filler], self.temporal_constraints.get(nfc["variable"], None), leeway):
+                    # yup, this filler runs afoul of some temporal constraint.
+                    # do not use it
+                    print("temp mismatch")
+                    has_temporal_constraint = True
+                    continue
 
             # can this statement be added to the hypothesis without contradiction?
             # extended hypothesis
@@ -285,13 +289,27 @@ class ClusterSeeds:
         self.graph_obj = graph_obj
         self.soin_obj = soin_obj
 
+        # parameters for ranking
+        self.rank_first_k = 100
+        self.bonus_for_novelty = -5
+        self.consider_next_k_in_reranking = 10000
+
         # make seed clusters
         self.hypotheses = self._make_seeds()
-
-
+        
     # export hypotheses to AidaHypothesisCollection
     def finalize(self):
-        hypotheses_for_export = [ h.finalize() for h in self.hypotheses ]
+
+        # ranking is a list of the hypotheses in self.hypotheses,
+        # best first
+        ranking = self._rank_seeds()
+
+        # turn ranking into log weights:
+        # meaningless numbers. just assign 1/2, 1/3, 1/4, ...
+        for rank, hyp in enumerate(ranking):
+            hyp.lweight = math.log(1.0 / (rank + 1))
+        
+        hypotheses_for_export = [ h.finalize() for h in ranking ] #sorted(self.hypotheses, key = lambda h:h.hypothesis.lweight, reverse = True)]
         return AidaHypothesisCollection( hypotheses_for_export)
         
     # create initial cluster seeds.
@@ -304,7 +322,8 @@ class ClusterSeeds:
         for facet_index, facet in enumerate(self.soin_obj["facets"]):
 
             # start a new hypothesis
-            core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), AidaHypothesis(self.graph_obj), lweight = 0.0)
+            core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), \
+                                          AidaHypothesis(self.graph_obj), lweight = 0.0)
             hypotheses_todo.append(core_hyp)
 
         # extend all hypotheses in the deque until they are done
@@ -320,7 +339,8 @@ class ClusterSeeds:
 
         # at this point, all hypotheses are as big as they can be.
         return hypotheses_done
- 
+
+
     # given the "temporal" piece of a statement of information need,
     # turn the date and time info in the dictionary
     # into Python datetime objects
@@ -337,3 +357,166 @@ class ClusterSeeds:
                 retv[qvar]["end_time"] = AidaIncompleteDate(entry.get("year", None), entry.get("month", None), entry.get("day", None))
                                                         
         return retv
+
+    #########################
+    # compute a weight for all cluster seeds in self.hypotheses
+    def _rank_seeds(self):
+        # group seeds by their current weight,
+        # which depends on whether they missed any query constraints
+        hypothesis_groups = self._group_seed_byweight(self.hypotheses)
+        
+        # initial ranking by connectedness, using the hypothesis groups
+        ranking= self._rank_seed_connectedness(hypothesis_groups)
+
+        # re-rank by diversity. we only care about the self.rank_first_k highest ranked items
+        ranking = self._rank_seed_novelty(ranking)
+
+        # ranking is a list of hypotheses from self.hypotheses, ranked
+        # best first
+        return ranking
+
+    # group hypotheses by their lweight,
+    # which indicates whether they failed to meet any query constraints
+    def _group_seed_byweight(self, hypotheses):
+        grouping = { }
+        for hyp in hypotheses:
+            if hyp.lweight is None:
+                # this should not happen, but just to make sure
+                hyp.lweight = 0.0
+                
+            if hyp.lweight not in grouping:
+                grouping[hyp.lweight] = [ ]
+
+            grouping[hyp.lweight].append(hyp)
+
+        return grouping
+    
+    # weighting based on connectedness of a cluster seed:
+    # sum of degrees of EREs in the cluster.
+    # this rewards both within-cluster and around-cluster connectedness
+    # this does seed connectedness ratings for multiple groups of hypotheses,
+    # where the grouping is a mapping from weight to group
+    def _rank_seed_connectedness(self, grouped_hypotheses):
+        ranking = [ ]
+        # sort groups by weight, highest weight first
+        for lweight, group in sorted(grouped_hypotheses.items(), reverse = True):
+            ranking += self._rank_seed_connectedness_forgroup(group)
+
+        return ranking
+
+    #  do the actual work in connectedness ranking
+    def _rank_seed_connectedness_forgroup(self, hypotheses):
+        weights = [ ]
+
+        for hypothesis in hypotheses:
+            outdeg = 0
+            # for each ERE of this hypothesis
+            for erelabel in hypothesis.hypothesis.eres():
+                # find statements IDs of statements adjacent to the EREs of this hypothesis
+                for stmtlabel in self.graph_obj.each_ere_adjacent_stmt_anyrel(erelabel):
+                    outdeg += 1
+            weights.append( outdeg)
+
+        return [ h for h, w in sorted(zip(hypotheses, weights), key = lambda hw:hw[1], reverse = True)]
+
+    # given a list of pairs (ranking, OneClusterSeed object),
+    # produce a new such list where objects are ranked more highly
+    # if they differ most from all the top k items
+    def _rank_seed_novelty(self, hypotheses):
+        ranked = [ hypotheses[0] ]
+        torank = hypotheses[1:]
+
+        qvar_characterization = self._update_qvar_characterization_for_seednovelty({ }, hypotheses[0])
+
+        print("HIER rank0", hypotheses[0].qvar_filler)
+        ix = 0
+        
+        while len(torank) > max(0, len(hypotheses) - self.rank_first_k):
+            # select the item to rank next
+            # print("HIER qvar ch.", qvar_characterization)
+            nextitem_index = self._rank_seed_novelty_one(torank, qvar_characterization)
+            if nextitem_index is None:
+                # we didn't find any more items to rank
+                break
+            
+            # append the next best item to the ranked items
+            nextitem = torank.pop(nextitem_index)
+            ranked.append(nextitem)
+            if ix < 11:
+                print("HIEr nextitem", nextitem.qvar_filler)
+                ix += 1
+            qvar_characterization = self._update_qvar_characterization_for_seednovelty(qvar_characterization, nextitem)
+
+        # at this point we have ranked the self.rank_first_k items
+        # just attach the rest of the items at the end
+        ranked += torank
+
+        return ranked
+
+    def _rank_seed_novelty_one(self, torank, qvar_characterization):
+        # for each item in torank, determine difference from items in ranked
+        # in terms of qvar_filler
+
+        best_index = None
+        best_value = None
+        
+        for index, hyp in enumerate(torank):
+            if index >= self.consider_next_k_in_reranking:
+                # we have run out of the next k to consider,
+                # don't go further down the list
+                break
+
+            this_value = 0
+            for qvar, filler in hyp.qvar_filler.items():
+                if qvar in qvar_characterization.keys():
+                    if filler in qvar_characterization[ qvar ]:
+                        # there are higher-ranked hypotheses that have the same filler
+                        # for this qvar. take a penalty for that
+                        this_value += qvar_characterization[qvar][filler]
+                    else:
+                        # novel qvar filler! Take a bonus
+                        this_value += self.bonus_for_novelty
+                else:
+                    # this hypothesis, for some reason, has a query variable
+                    # that we haven't seen before.
+                    # this shouldn't happen.
+                    # oh well, take a bonus for novelty then
+                    this_value += self.bonus_for_novelty
+
+            # print("HIER1", this_value, hyp.qvar_filler)
+            # input("hit enter...")
+
+            # at this point we have the value for the current hypothesis.
+            # if it is the minimum achievable value, stop here and go with this hypothesis
+            if this_value <= self.bonus_for_novelty * len(qvar_characterization):
+                best_index = index
+                best_value = this_value
+                break
+
+            # check if the current value is better than the previous best.
+            # if so, record this index as the best one
+            if best_value is None or this_value < best_value:
+                best_index = index
+                best_value = this_value
+
+
+        return best_index
+
+        
+    # ranking by seed novelty uses a characterization of the query variable fillers for the
+    # already ranked items.
+    # this function takes an existing query variable characterization and updates it
+    # with the query variable fillers of the given hypothesis, which is a OneClusterSeed.
+    # format of qvar_characterization:
+    # qvar -> filler -> count
+    #
+    # That is, we penalize a hypothesis that has the same qvar filler that we have seen before
+    # with a value equivalent to the number of previous hypotheses that had the same filler.
+    def _update_qvar_characterization_for_seednovelty(self, qvar_characterization, hypothesis):
+        for qvar, filler in hypothesis.qvar_filler.items():
+            if qvar not in qvar_characterization:
+                qvar_characterization[ qvar ] = { }
+
+            qvar_characterization[ qvar ][ filler ] = qvar_characterization[qvar].get(filler, 0) + 1
+
+        return qvar_characterization
