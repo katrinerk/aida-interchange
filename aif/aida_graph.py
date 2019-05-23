@@ -411,7 +411,6 @@ class AidaGraph(RDFGraph):
                        "boundingBoxUpperLeftX" : boundingBoxUpperLeftX, "boundingBoxUpperLeftY" : boundingBoxUpperLeftY}
             
             
-        return [ ]
 
     def times_associated_with(self, nodelabel):
         if not self.has_node(nodelabel) or \
