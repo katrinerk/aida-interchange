@@ -70,8 +70,9 @@ def work(soin_filename, graph_filename = None, graph_dir = None, out_filename = 
             json_seeds["probs"] = json_seeds["probs"][:options.maxnumseeds]
             json_seeds["support"] = json_seeds["support"][:options.maxnumseeds]
 
-        # add graph filename
-        json_seeds["graph_filename"] = os.path.abspath(graph_filename)
+        # add graph filename and queries
+        json_seeds["graph"] = os.path.basename(graph_filename)
+        json_seeds["queries"] = soin_obj["queries"]
         json.dump(json_seeds, fout, indent = 1)
 
 
