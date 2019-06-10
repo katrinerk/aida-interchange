@@ -12,12 +12,17 @@ import sys
 ########3
 # one AIDA hypothesis
 class AidaHypothesis:
-    def __init__(self, graph_obj, stmts = None, core_stmts = None, lweight = 0.0):
+    def __init__(self, graph_obj, stmts = None, stmt_weights = None, core_stmts = None, lweight = 0.0):
         self.graph_obj = graph_obj
         if stmts is None:
             self.stmts = set()
         else:
             self.stmts = stmts
+
+        if stmt_weights is None:
+            self.stmt_weights = { }
+        else:
+            self.stmt_weights = stmt_weights
 
         if core_stmts is None:
             self.core_stmts = set()
@@ -30,10 +35,16 @@ class AidaHypothesis:
         # hypothesis weight
         self.lweight = lweight
 
+        # query variables and fillers, for quick access to the core answer that this query gives
+        self.qvar_filler = { }
+
+        # weight if none is given
+        self.default_weight = -100.0
+
     #####
     # extending a hypothesis: adding a statement outright,
     # or making a new hypothesis and adding the statement there
-    def add_stmt(self, stmtlabel, core = False):
+    def add_stmt(self, stmtlabel, core = False, weight = None):
         if stmtlabel in self.stmts:
             return
         
@@ -41,6 +52,11 @@ class AidaHypothesis:
             self.core_stmts.add(stmtlabel)
 
         self.stmts.add(stmtlabel)
+
+        if weight is not None:
+            self.stmt_weights[ stmtlabel ] = weight
+        elif core:
+            self.stmt_weights[stmtlabel ] = 0.0
 
     def extend(self, stmtlabel, core = False):
         if stmtlabel in self.stmts:
@@ -51,15 +67,59 @@ class AidaHypothesis:
         return new_hypothesis
 
     def copy(self):
-        return AidaHypothesis(self.graph_obj, self.stmts.copy(), self.core_stmts.copy())
+        return AidaHypothesis(self.graph_obj, stmts = self.stmts.copy(), core_stmts = self.core_stmts.copy(), stmt_weights = self.stmt_weights.copy())
 
+    #########3
+    # give weights to type statements in this hypothesis:
+    # single type, or type of an event/relation used in an event/relation argument:
+    # weight of maximum neighbor.
+    # otherwise, low default weight
+    def set_typeweights(self):
 
+        # map each ERE to adjacent type statements
+        ere_types = { }
+        for stmt in self.stmts:
+            if self.graph_obj.is_typestmt(stmt):
+                ere = self.graph_obj.stmt_subject(stmt)
+                if ere is not None:
+                    if ere not in ere_types: ere_types[ere] = [ ]
+                    ere_types[ere].append(stmt)
+
+        for ere, typestmts in ere_types.items():
+            ere_weight = max(self.stmt_weights.get(stmt, self.default_weight) for stmt in self.graph_obj.each_ere_adjacent_stmt_anyrel(ere))
+            # print("HIER1", ere, ere_weight)
+            if len(typestmts) == 1:
+                # one type statement only: gets weight of maximum-weight edge adjacent to ere
+                # print("HIER2 single type statement", ere, typestmts[0], ere_weight)
+                self.stmt_weights[ typestmts[0] ] = ere_weight
+            else:
+                # multiple type statements for ere
+                # what outgoing event/relation edges does it have?
+                eventrel_roles_ere = [ self.graph_obj.shorten_label(rolelabel) for rolelabel, arg in self.eventrelation_each_argument(ere)]
+                for typestmt in typestmts:
+                    typelabel = self.graph_obj.stmt_object(typestmt)
+                    if typelabel is None:
+                        self.stmt_weights[stmt] = self.default_weight
+                        continue
+                    
+                    typelabel = self.graph_obj.shorten_label(typelabel)
+                    if any(rolelabel.startswith(typelabel) and len(rolelabel) > len(typelabel) for rolelabel in eventrel_roles_ere):
+                        # this is a type that is used in an outgoing edge of this ERE
+                        # print("HIER3 used type", ere, typelabel, eventrel_roles_ere, ere_weight)
+                        self.stmt_weights[ typestmt ] = ere_weight
+                    else:
+                        # no reason not to give a low default weight to this edge
+                        self.stmt_weights[stmt] = self.default_weight
+                        
+        
     ########
     # json output as a hypothesis
     # make a json object describing this hypothesis
     def to_json(self):
+        stmtlist = list(self.stmts)
         return {
-            "statements" : list(self.stmts),
+            "statements" : stmtlist,
+            "statementWeights" : [ self.stmt_weights.get(s, self.default_weight) for s in stmtlist],
             "failedQueries": self.failed_queries,
             "queryStatements" : list(self.core_stmts)
             }
@@ -70,6 +130,9 @@ class AidaHypothesis:
     # update the log weight 
     def update_lweight(self, added_lweight):
         self.lweight += added_lweight
+
+    def add_qvar_filler(self, qvar_filler):
+        self.qvar_filler = qvar_filler
     
     ########
     # readable output: return EREs in this hypothesis, and the statements associated with them
@@ -216,7 +279,8 @@ class AidaHypothesis:
 
     # names of an entity
     def entity_names(self, ere_id):
-        return self.graph_obj.english_names(self.graph_obj.ere_names(ere_id))
+        #return self.graph_obj.english_names(self.graph_obj.ere_names(ere_id))
+        return self.graph_obj.ere_names(ere_id)
 
 
     # possible affiliations of an ERE:

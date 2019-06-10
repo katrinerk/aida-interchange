@@ -227,7 +227,6 @@ class OneClusterSeed:
     # and has_temporal_constraint is true if there was at least one temporal constraint that didn't get matched
     def _extend_withvariable(self, nfc, leeway = 0):
 
-        # print("HIER leeway", leeway)
         retv = [ ]
         has_temporal_constraint = False
         
@@ -428,8 +427,7 @@ class ClusterSeeds:
 
         qvar_characterization = self._update_qvar_characterization_for_seednovelty({ }, hypotheses[0])
 
-        print("HIER rank0", hypotheses[0].qvar_filler)
-        ix = 0
+        # print("HIER rank0", hypotheses[0].qvar_filler)
         
         while len(torank) > max(0, len(hypotheses) - self.rank_first_k):
             # select the item to rank next
@@ -442,9 +440,6 @@ class ClusterSeeds:
             # append the next best item to the ranked items
             nextitem = torank.pop(nextitem_index)
             ranked.append(nextitem)
-            if ix < 11:
-                print("HIEr nextitem", nextitem.qvar_filler)
-                ix += 1
             qvar_characterization = self._update_qvar_characterization_for_seednovelty(qvar_characterization, nextitem)
 
         # at this point we have ranked the self.rank_first_k items

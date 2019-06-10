@@ -41,6 +41,8 @@ class ClusterExpansion:
             for ere_id in hypothesis.eres():
                 for stmtlabel in self.graph_obj.each_ere_adjacent_stmt(ere_id, "type", "subject"):
                     hypothesis.add_stmt(stmtlabel)
+            # add weights for the types we have been adding
+            hypothesis.set_typeweights()
 
  
 

@@ -75,6 +75,21 @@ class AidaJson:
     def is_typestmt(self, nodelabel):
         return self.is_statement(nodelabel) and self.thegraph[nodelabel]["predicate"] == "type"
 
+    def stmt_subject(self, stmtlabel):
+        if not self.is_statement(stmtlabel):
+            return None
+        else: return self.thegraph[stmtlabel]["subject"]
+
+    def stmt_object(self, stmtlabel):
+        if not self.is_statement(stmtlabel):
+            return None
+        else: return self.thegraph[stmtlabel]["object"]
+
+    def stmt_predicate(self, stmtlabel):
+        if not self.is_statement(stmtlabel):
+            return None
+        else: return self.thegraph[stmtlabel]["predicate"]
+
     ###
     # given an ERE label, return labels of all adjacent statements
     # with the given predicate and where erelabel is an argument in the given ererole (subject, object)
