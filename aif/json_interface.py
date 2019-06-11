@@ -16,7 +16,7 @@ from tqdm import tqdm
 # * compute pairwise distances between statements
 class JsonInterface:
     #def __init__(self, mygraph, entrypoints, simplification_level = 0, maxdist = 5):
-    def __init__(self, mygraph, simplification_level = 0, maxdist = 5, compute_dist = True):
+    def __init__(self, mygraph, simplification_level = 0, maxdist = 5, compute_dist = False):
         self.mygraph = mygraph
 
         # main json object
@@ -129,10 +129,10 @@ class JsonInterface:
                 
                 content = node.get("prototype", shorten=False)
                 if len(content) > 0:
-                    # record this node only if it has a prototype as required
                     self.json_obj["theGraph"][node.name]["prototype"] = str(content.pop())
-                else:
-                    del self.json_obj["theGraph"][node.name]
+                ## else:
+                ##     # record this node only if it has a prototype as required
+                ##     del self.json_obj["theGraph"][node.name]
 
             # clusterMembership statements have a cluster, a clusterMember, and a maximal confidence level
             elif node.is_cluster_membership():
@@ -152,12 +152,14 @@ class JsonInterface:
                 if len(conflevels) > 0:
                     self.json_obj["theGraph"][ node.name]["conf"] = max(conflevels)
 
-                # check that the node is well-formed
-                if all(label in self.json_obj["theGraph"][node.name] for label in ["cluster", "clusterMember", "conf"]):
-                    self.coref_counter += 1
-                    # self.json_obj["coref_statements"].append(node.name)
-                else:
-                    del self.json_obj["theGraph"][node.name]
+                self.coref_counter += 1
+                
+                ## # check that the node is well-formed
+                ## if all(label in self.json_obj["theGraph"][node.name] for label in ["cluster", "clusterMember", "conf"]):
+                ##     self.coref_counter += 1
+                ##     # self.json_obj["coref_statements"].append(node.name)
+                ## else:
+                ##     del self.json_obj["theGraph"][node.name]
                   
                     
             # statements have a single subj, pred, obj, a maximal confidence level, and possibly mentions.
@@ -184,10 +186,10 @@ class JsonInterface:
                 if len(conflevels) > 0:
                     self.json_obj["theGraph"][ node.name]["conf"] = max(conflevels)
 
-                # source document ids
-                sources = set(self.mygraph.sources_associated_with(node.name))
-                if len(sources) > 0:
-                    self.json_obj["theGraph"][node.name]["source"] = list(sources)
+                ## # source document ids
+                ## sources = set(self.mygraph.sources_associated_with(node.name))
+                ## if len(sources) > 0:
+                ##     self.json_obj["theGraph"][node.name]["source"] = list(sources)
 
                 # hypotheses
                 hypotheses = set(self.mygraph.hypotheses_supported(node.name))
@@ -200,14 +202,15 @@ class JsonInterface:
                 if len(hypotheses) > 0:
                     self.json_obj["theGraph"][node.name]["hypotheses_contradicted"] = list(hypotheses)
 
-                # well-formedness check
-                wellformed = False
-                if all(label in self.json_obj["theGraph"][node.name] for label in ["conf", "predicate", "subject", "object"]):
-                    wellformed = True
-                    self.statement_counter += 1
-                    self.json_obj["statements"].append(node.name)
-                else:
-                    del self.json_obj["theGraph"][node.name]
+                self.statement_counter += 1
+                ## # well-formedness check
+                ## wellformed = False
+                ## if all(label in self.json_obj["theGraph"][node.name] for label in ["conf", "predicate", "subject", "object"]):
+                ##     wellformed = True
+                ##     self.statement_counter += 1
+                ##     self.json_obj["statements"].append(node.name)
+                ## else:
+                ##     del self.json_obj["theGraph"][node.name]
 
                 # record justification
                 if wellformed:
