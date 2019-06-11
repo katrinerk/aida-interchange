@@ -132,7 +132,13 @@ class AidaJson:
     ####
     # names, if any
     def ere_names(self, erelabel):
-        return self.thegraph[erelabel].get("name", [])
+        names = self.thegraph[erelabel].get("name", [])
+        if names != []:
+            return names
+        
+        names = self.thegraph[erelabel].get("hasName", [ ])
+        return names
+            
     
     ######################################
 

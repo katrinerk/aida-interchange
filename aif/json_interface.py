@@ -213,10 +213,13 @@ class JsonInterface:
                 ##     del self.json_obj["theGraph"][node.name]
 
                 # record justification
-                if wellformed:
-                    this_justification = self.get_justification(node)
-                    if len(this_justification) > 0:
-                        self.json_just_obj[node.name] = this_justification
+                ## if wellformed:
+                ##     this_justification = self.get_justification(node)
+                ##     if len(this_justification) > 0:
+                ##         self.json_just_obj[node.name] = this_justification
+                this_justification = self.get_justification(node)
+                if len(this_justification) > 0:
+                    self.json_just_obj[node.name] = this_justification
                     
                     
 
