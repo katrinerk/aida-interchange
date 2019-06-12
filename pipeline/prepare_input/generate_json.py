@@ -6,7 +6,8 @@
 # python3 generate_json.py <kbfilename> <jsonfilename> <jsonjustfilename>
 #
 # where
-# kbfilename is the name of an AIF file in .ttl format
+# kbfilename is the name of an AIF file in .ttl format, or of a directory in which all files are .ttl files.
+#     In the latter case, all the files in the directory are combined into a single json file
 # jsonfilename is the name of the output file, in json format
 # jsonjustfilename is the name of a file in json format listing justifications for all nodes
 
