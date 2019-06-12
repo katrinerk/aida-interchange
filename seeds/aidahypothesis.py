@@ -154,10 +154,9 @@ class AidaHypothesis:
         for typelabel in self.ere_each_type(ere_id):
             retv += prefix + "ISA: " + typelabel + "\n"
 
-        # print string labels, if any
-        names = self.entity_names(ere_id)
-        if len(names) > 0:
-            retv += prefix + "names: " + ", ".join(names) + "\n"
+        # print string label
+        name = self.entity_best_name(ere_id)
+        retv += prefix + "handle: " + name + "\n"
 
         return retv
         
@@ -281,6 +280,13 @@ class AidaHypothesis:
     def entity_names(self, ere_id):
         #return self.graph_obj.english_names(self.graph_obj.ere_names(ere_id))
         return self.graph_obj.ere_names(ere_id)
+
+    # "best" name of an entity
+    def entity_best_name(self, ere_id):
+        names = self.entity_names(ere_id)
+        if names is None or names == [ ]:
+            return "[unknown]"
+        return min(names, key = lambda n: len(n))
 
 
     # possible affiliations of an ERE:
