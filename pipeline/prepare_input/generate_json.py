@@ -12,6 +12,7 @@
 
 import logging
 import sys
+import os
 
 from os.path import dirname, realpath
 src_path = dirname(dirname(dirname(realpath(__file__))))
@@ -21,22 +22,39 @@ import rdflib
 
 from aif import AidaGraph, JsonInterface
 
+
+#########################
+def work(kb_filename, mygraph):
+    logging.info('Reading kb from {}...'.format(kb_filename))
+    g = rdflib.Graph()
+    result = g.parse(kb_filename, format="ttl")
+    logging.info('Done.')
+
+    logging.info('Building AidaGraph with {} triples...'.format(len(g)))
+    
+    mygraph.add_graph(g)
+    logging.info('Done.')
+
+
+##########################
+
 logging.basicConfig(
     level=logging.DEBUG, format='%(asctime)s - %(message)s')
 
-kb_filename = sys.argv[1]
+kb_name = sys.argv[1]
 output_filename = sys.argv[2]
 output_just_filename = sys.argv[3]
 
-logging.info('Reading kb from {}...'.format(kb_filename))
-g = rdflib.Graph()
-result = g.parse(kb_filename, format="ttl")
-logging.info('Done.')
-
-logging.info('Building AidaGraph with {} triples...'.format(len(g)))
 mygraph = AidaGraph()
-mygraph.add_graph(g)
-logging.info('Done.')
+
+
+if os.path.isdir(kb_name):
+    for kb_basename in os.listdir(kb_name):
+        kb_filename = os.path.join(kb_name, kb_basename)
+        work(kb_filename, mygraph)
+else:
+    work(kb_name, mygraph)
+        
 
 logging.info('Building json representation of the AIF graph...')
 json_obj = JsonInterface(mygraph, simplification_level=0)
