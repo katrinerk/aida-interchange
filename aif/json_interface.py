@@ -35,6 +35,9 @@ class JsonInterface:
 
         # do the work
         self._transform_graph()
+
+        # check if we have all the info we needed
+        self._validate()
         
         # and pairwise statement distances. we consider maximal distances of 5.
         if compute_dist:
@@ -91,52 +94,57 @@ class JsonInterface:
         
         # we write out statements, events, entities, relations
         for node in tqdm(self.mygraph.nodes()):
-            
+            nodelabel = str(node.name)
             # entities, events, relations: they  have a type. They also have a list of adjacent statements,
             # and an index. They have optional names.
             if node.is_ere():
-                self.json_obj["theGraph"][node.name] = {
+                self.json_obj["theGraph"][nodelabel] = {
                     "adjacent": self._adjacent_statements(node),
                     "index": self.ere_counter}
 
                 if node.is_event():
-                    self.json_obj["theGraph"][node.name]["type"] = "Event"
+                    self.json_obj["theGraph"][nodelabel]["type"] = "Event"
                 elif node.is_entity():
-                    self.json_obj["theGraph"][node.name]["type"] = "Entity"
+                    self.json_obj["theGraph"][nodelabel]["type"] = "Entity"
                 else:
-                    self.json_obj["theGraph"][node.name]["type"] = "Relation"
+                    self.json_obj["theGraph"][nodelabel]["type"] = "Relation"
 
                 enames = list(set(self.mygraph.names_of_ere(node.name)))
                 if len(enames) > 0:
-                    self.json_obj["theGraph"][node.name]["name"] = enames
+                    self.json_obj["theGraph"][nodelabel]["name"] = enames
 
                 # temporal information (for events)
                 temporal = list(self.mygraph.times_associated_with(node.name))
                 if len(temporal) > 0:
-                    self.json_obj["theGraph"][node.name]["ldcTime"] = temporal
+                    self.json_obj["theGraph"][nodelabel]["ldcTime"] = temporal
 
                 self.ere_counter += 1
-                self.json_obj["ere"].append(node.name)
+                self.json_obj["ere"].append(nodelabel)
 
                 # record justification
                 this_justification = self.get_justification(node)
                 if len(this_justification) > 0:
-                    self.json_just_obj[node.name] = this_justification
+                    self.json_just_obj[nodelabel] = this_justification
                 
-            # node describing a cluster: has a prototypical member
+            # node describing a cluster: has a prototypical member and a handle (preferred name)
             elif node.is_sameas_cluster():
-                self.json_obj["theGraph"][node.name] = {"type": "SameAsCluster"}
+                self.json_obj["theGraph"][nodelabel] = {"type": "SameAsCluster"}
                 
                 content = node.get("prototype", shorten=False)
                 if len(content) > 0:
-                    self.json_obj["theGraph"][node.name]["prototype"] = str(content.pop())
+                    self.json_obj["theGraph"][nodelabel]["prototype"] = str(content.pop())
+
+                content = node.get("handle", shorten = True)
+                if len(content) > 0:
+                    self.json_obj["theGraph"][nodelabel]["handle"] = str(content.pop())
+                    
                 ## else:
                 ##     # record this node only if it has a prototype as required
-                ##     del self.json_obj["theGraph"][node.name]
+                ##     del self.json_obj["theGraph"][nodelabel]
 
             # clusterMembership statements have a cluster, a clusterMember, and a maximal confidence level
             elif node.is_cluster_membership():
-                self.json_obj["theGraph"][node.name] = {
+                self.json_obj["theGraph"][nodelabel] = {
                     "type": "ClusterMembership",
                     "index": self.coref_counter}
 
@@ -144,22 +152,22 @@ class JsonInterface:
                 for label in ["cluster", "clusterMember"]:
                     content = node.get(label, shorten=False)
                     if len(content) > 0:
-                        self.json_obj["theGraph"][node.name][label] = str(content.pop())
+                        self.json_obj["theGraph"][nodelabel][label] = str(content.pop())
                 
 
                 # confidence
                 conflevels = self.mygraph.confidence_of(node.name)
                 if len(conflevels) > 0:
-                    self.json_obj["theGraph"][ node.name]["conf"] = max(conflevels)
+                    self.json_obj["theGraph"][ nodelabel]["conf"] = max(conflevels)
 
                 self.coref_counter += 1
                 
                 ## # check that the node is well-formed
-                ## if all(label in self.json_obj["theGraph"][node.name] for label in ["cluster", "clusterMember", "conf"]):
+                ## if all(label in self.json_obj["theGraph"][nodelabel] for label in ["cluster", "clusterMember", "conf"]):
                 ##     self.coref_counter += 1
-                ##     # self.json_obj["coref_statements"].append(node.name)
+                ##     # self.json_obj["coref_statements"].append(nodelabel)
                 ## else:
-                ##     del self.json_obj["theGraph"][node.name]
+                ##     del self.json_obj["theGraph"][nodelabel]
                   
                     
             # statements have a single subj, pred, obj, a maximal confidence level, and possibly mentions.
@@ -167,7 +175,7 @@ class JsonInterface:
             # Statements also have justifications, which go in the justification object
             elif node.is_statement():
                 # type
-                self.json_obj["theGraph"][node.name] = {
+                self.json_obj["theGraph"][nodelabel] = {
                     "type": "Statement",
                     "index": self.statement_counter}
 
@@ -175,32 +183,32 @@ class JsonInterface:
                 for label in ["subject", "object"]:
                     content = node.get(label, shorten=False)
                     if len(content) > 0:
-                        self.json_obj["theGraph"][node.name][label] = str(content.pop())
+                        self.json_obj["theGraph"][nodelabel][label] = str(content.pop())
 
                 predicates = node.get("predicate", shorten=True)
                 if len(predicates) > 0:
-                    self.json_obj["theGraph"][node.name]["predicate"] = str(predicates.pop())
+                    self.json_obj["theGraph"][nodelabel]["predicate"] = str(predicates.pop())
 
                 # confidence
                 conflevels = self.mygraph.confidence_of(node.name)
                 if len(conflevels) > 0:
-                    self.json_obj["theGraph"][ node.name]["conf"] = max(conflevels)
+                    self.json_obj["theGraph"][ nodelabel]["conf"] = max(conflevels)
 
                 ## # source document ids
                 ## sources = set(self.mygraph.sources_associated_with(node.name))
                 ## if len(sources) > 0:
-                ##     self.json_obj["theGraph"][node.name]["source"] = list(sources)
+                ##     self.json_obj["theGraph"][nodelabel]["source"] = list(sources)
 
                 # hypotheses
                 hypotheses = set(self.mygraph.hypotheses_supported(node.name))
                 if len(hypotheses) > 0:
-                    self.json_obj["theGraph"][node.name]["hypotheses_supported"] = list(hypotheses)
+                    self.json_obj["theGraph"][nodelabel]["hypotheses_supported"] = list(hypotheses)
                 hypotheses = set(self.mygraph.hypotheses_partially_supported(node.name))
                 if len(hypotheses) > 0:
-                    self.json_obj["theGraph"][node.name]["hypotheses_partially_supported"] = list(hypotheses)
+                    self.json_obj["theGraph"][nodelabel]["hypotheses_partially_supported"] = list(hypotheses)
                 hypotheses = set(self.mygraph.hypotheses_contradicted(node.name))
                 if len(hypotheses) > 0:
-                    self.json_obj["theGraph"][node.name]["hypotheses_contradicted"] = list(hypotheses)
+                    self.json_obj["theGraph"][nodelabel]["hypotheses_contradicted"] = list(hypotheses)
 
                 self.statement_counter += 1
                 ## # well-formedness check
@@ -219,7 +227,7 @@ class JsonInterface:
                 ##         self.json_just_obj[node.name] = this_justification
                 this_justification = self.get_justification(node)
                 if len(this_justification) > 0:
-                    self.json_just_obj[node.name] = this_justification
+                    self.json_just_obj[nodelabel] = this_justification
                     
                     
 
@@ -229,6 +237,42 @@ class JsonInterface:
         ##         self.json_obj["theGraph"][nodelabel]["adjacent"] = [ self.json_obj["theGraph"][stmt]["index"] for stmt in self.json_obj["theGraph"][nodelabel]["adjacent"]]
 
         logging.info('Done.')
+
+
+    def _validate(self):
+        logging.info('Validating the graph...')
+
+        # check if all clusters have handles. if they don't, add them.
+        clusters_without_handles = set( label for label in self.json_obj["theGraph"]\
+                                         if self.json_obj["theGraph"][label].get("type", None) == "SameAsCluster" and "handle" not in self.json_obj["theGraph"][label])
+
+        if len(clusters_without_handles) > 0:
+            # make a mapping from cluster IDs without handles to all names of all cluster members
+            cluster_names = { }
+            # check the cluster nodes for the clusters without handles
+            for cluster in clusters_without_handles:
+                member = self.json_obj["theGraph"][cluster].get("prototype", None)
+                if member is not None and member in self.json_obj["theGraph"]:
+                    if cluster not in cluster_names: cluster_names[ cluster ] = [ ]
+                    cluster_names[ cluster] += self.json_obj["theGraph"][member].get("name", [])
+                    
+            for label in self.json_obj["theGraph"]:
+                # check cluster membership nodes for the clusters without handles
+                if self.json_obj["theGraph"][label].get("type", None) == "ClusterMembership" and self.json_obj["theGraph"][label].get("cluster", None) in clusters_without_handles:
+                    cluster = self.json_obj["theGraph"][label].get("cluster", None)
+                    member = self.json_obj["theGraph"][label].get("clusterMember", None)
+                    if member is not None and member in self.json_obj["theGraph"]:
+                        if cluster not in cluster_names: cluster_names[ cluster ] = [ ]
+                        cluster_names[ cluster] += self.json_obj["theGraph"][member].get("name", [])
+
+            # now add a handle for all clusters that are missing one
+            for cluster in clusters_without_handles:
+                if cluster in cluster_names:
+                    # grab the shortest name
+                    self.json_obj["theGraph"][cluster]["handle"] = min(cluster_names[cluster], key = lambda n:len(n))
+                else:
+                    self.json_obj["theGraph"][cluster]["handle"] = "[unknown]"
+        
 
     # for an entity, relation, or event, determine all statements that mention it
     def _adjacent_statements(self, node):
