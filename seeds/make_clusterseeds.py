@@ -44,8 +44,12 @@ def work(soin_filename, graph_filename = None, graph_dir = None, out_filename = 
         print("could not determine graph file for SoIN", soin_filename)
         return
 
-    with open(graph_filename, 'r') as fin:
-        graph_obj = AidaJson(json.load(fin))
+    try:
+        with open(graph_filename, 'r') as fin:
+            graph_obj = AidaJson(json.load(fin))
+    except FileNotFoundError:
+        print("could not find graph file", graph_filename, "-- skipping")
+        return
 
     if out_filename is None:
         out_filename = soin_filename + ".out.json"
