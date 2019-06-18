@@ -51,8 +51,9 @@ mygraph = AidaGraph()
 
 if os.path.isdir(kb_name):
     for kb_basename in os.listdir(kb_name):
-        kb_filename = os.path.join(kb_name, kb_basename)
-        work(kb_filename, mygraph)
+        if kb_basename.endswith(".json"):
+            kb_filename = os.path.join(kb_name, kb_basename)
+            work(kb_filename, mygraph)
 else:
     work(kb_name, mygraph)
         
