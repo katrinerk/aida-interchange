@@ -237,23 +237,24 @@ json_out["ere"] = sorted(json_log["ereName"].keys(), key = lambda e:json_out["th
 # write statement list
 json_out["statements"] = sorted(json_log["stmtName"].keys(), key = lambda s:json_out["theGraph"][s]["index"])
 
-# adapt statement proximity
-proximities = { }
-# new statement proximity: maximum of proximities of old statements
-for stmt1, prox1 in json_in["statementProximity"].items():
-    newstmt1 = get_newstmt_label(stmt1, ereunif, json_in["theGraph"], oldstmt_newstmt)
-    if newstmt1 is None:
-        continue
-    if newstmt1 not in proximities:
-        proximities[newstmt1] = { }
-        
-    for stmt2, value in prox1.items():
-        newstmt2 = get_newstmt_label(stmt2, ereunif, json_in["theGraph"], oldstmt_newstmt)
-        if newstmt2 is None:
+if 'statementProximity' in json_in:
+    # adapt statement proximity
+    proximities = { }
+    # new statement proximity: maximum of proximities of old statements
+    for stmt1, prox1 in json_in["statementProximity"].items():
+        newstmt1 = get_newstmt_label(stmt1, ereunif, json_in["theGraph"], oldstmt_newstmt)
+        if newstmt1 is None:
             continue
-        proximities[newstmt1][newstmt2] = max(value, proximities[newstmt1].get(newstmt2, 0))
-    
-json_out["statementProximity"] = proximities
+        if newstmt1 not in proximities:
+            proximities[newstmt1] = { }
+
+        for stmt2, value in prox1.items():
+            newstmt2 = get_newstmt_label(stmt2, ereunif, json_in["theGraph"], oldstmt_newstmt)
+            if newstmt2 is None:
+                continue
+            proximities[newstmt1][newstmt2] = max(value, proximities[newstmt1].get(newstmt2, 0))
+
+    json_out["statementProximity"] = proximities
 
 
 ################
