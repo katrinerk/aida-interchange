@@ -96,12 +96,27 @@ for label, content in json_in["theGraph"].items():
 # then determine coreference
 json_log["coref"] = [ ]
 
+# and remember which nodes went with which cluster
+node_cluster = { }
+
 for label, content in json_in["theGraph"].items():
     if content["type"] == "ClusterMembership":
+        if "clusterMember" not in content or "cluster" not in content:
+            continue
+        
         if flip(content["conf"]):
             # yes, consider this
             json_log["coref"].append(label)
             erecoref_obj.unify_ere_coref(content["clusterMember"], content["cluster"])
+            node_cluster[content["clusterMember"]] = content["cluster"]
+    elif content["type"] == "SameAsCluster":
+        if "prototype" not in content:
+            continue
+        # consider the prototype
+        if content["prototype"] not in json_log["coref"]:
+            json_log["coref"].append(content["prototype"])
+            erecoref_obj.unify_ere_coref(content["prototype"], label)
+            node_cluster[content["prototype"]] = label
 
             
 # mapping: oldname -> new name
@@ -122,7 +137,7 @@ json_out["theGraph"] = { }
 erecounter = 0
 
 # each new ERE (cluster of old EREs): make new index,
-# assume that all cluster members have the same type.
+# assume that all cluster members have the same type (entity/event/relation).
 # form union of content from cluster members
 for newname, oldnames in json_log["ereName"].items():
     # write new ERE entry
@@ -130,7 +145,7 @@ for newname, oldnames in json_log["ereName"].items():
         "index" : erecounter
         }
     # type info
-    types = set(json_in["theGraph"][n]["type"] for n in oldnames)
+    types = set(json_in["theGraph"][n]["type"] for n in oldnames if n in json_in["theGraph"] and "type" in json_in["theGraph"][n])
     if len(types) > 1:
         types.remove("Entity")
     if len(types) > 1:
@@ -148,6 +163,15 @@ for newname, oldnames in json_log["ereName"].items():
             if entry not in additional_info:
                 additional_info[ entry ] = set()
             additional_info[entry].update(content)
+
+        # add in cluster handle as a name, if it's not there yet
+        if oldname in node_cluster and node_cluster[oldname] in json_in["theGraph"] and "handle" in json_in["theGraph"][node_cluster[oldname]]:
+            additional_string= json_in["theGraph"][node_cluster[oldname]]["handle"]
+            if "name" not in additional_info:
+                additional_info["name"] = set()
+            if additional_string not in additional_info["name"]:
+                additional_info["name"].add(additional_string)
+            
 
     for entry, content in additional_info.items():
         json_out["theGraph"][newname][entry] = list(content)
