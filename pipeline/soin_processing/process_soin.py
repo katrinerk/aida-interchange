@@ -398,6 +398,70 @@ def check_type(node, ep):
     return num_matched
 
 
+def check_descriptor(graph, node, ep):
+    # Handle TEXT type descriptors
+    if ep["descriptor"]['type'] == "text":
+        justification_node_id_set = node.get('justifiedBy')
+        # If there is no justification information for this statement, return False
+        if not justification_node_id_set:
+            return False
+
+        justification_node_id = next(iter(justification_node_id_set))
+        justification_node = graph.get_node(justification_node_id)
+        if not justification_node:
+            return False
+
+        # Check the justification type; if it doesn't match, return False
+        justification_type = next(iter(justification_node.get("type", shorten=True)))
+        if justification_type != "TextJustification":
+            return False
+
+        justification_source = next(iter(justification_node.get("source"))).value.strip()
+        # Check the source document ID
+        if justification_source == ep['descriptor']['doceid']:
+            justification_start_offset = str(next(iter(justification_node.get("startOffset"))).value).strip()
+            justification_end_offset = str(next(iter(justification_node.get("endOffsetInclusive"))).value).strip()
+
+            # Check the character offsets
+            if justification_start_offset == ep['descriptor']['start']:
+                if justification_end_offset == ep['descriptor']['end']:
+                    return True
+        return False
+    return False
+
+
+def find_entrypoint(graph, ep):
+    """
+    This function resolves an Entrypoint definition to an AidaGraph node.
+
+    :param graph: an AidaGraph object
+    :param ep: a dictionary representing the Entrypoint definition (maintained in SOIN)
+    :return:
+    """
+    # Iterate through the nodes in the graph, looking for typing statements.
+    for node in graph.nodes():
+        if node.is_type_statement():
+            # Determine the number of typing classifications that match
+            # print(ep)
+            types_matched = check_type(node, ep)
+            descriptor_matched = check_descriptor(graph, node, ep)
+            if types_matched == 3 and descriptor_matched:
+                print("Winner winner!")
+                node.prettyprint()
+
+            # Check descriptor information for match
+
+def test_me():
+    soin = SOIN("/Users/eholgate/Desktop/SOIN/StatementOfInformationNeed_Example_M18/R103.xml")
+    graph = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R103/.")
+
+    for ep in soin.entrypoints:
+        if ep["descriptor"]["type"] == "text":
+            test_ep = ep
+            break
+
+    find_entrypoint(graph, test_ep)
+
 def main():
     parser = argparse.ArgumentParser(description="Convert an XML-based Statement of Information Need definition to "
                                                  "the JSON-compliant UT Austin internal representation, "
@@ -409,7 +473,7 @@ def main():
     soin = SOIN("/Users/eholgate/Desktop/SOIN/StatementOfInformationNeed_Example_M18/R103.xml")
     print(soin)
 
-    graph, graph_interface = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/"
+    graph, graph_interface = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/" +
                                         "Annotation_Generated_V4_Valid/R103/.")
 
     for ep in soin.entrypoints:
@@ -435,22 +499,9 @@ def main():
 if __name__ == "__main__":
     main()
 
-def test_me():
-    soin = SOIN("/Users/eholgate/Desktop/SOIN/StatementOfInformationNeed_Example_M18/R103.xml")
-    graph = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R103/.")
 
-    for ep in soin.entrypoints:
-        if ep["descriptor"]["type"] == "text":
-            test_ep = ep
-            break
 
-    for node in graph.nodes():
-        if node.is_type_statement():
-            f = check_type(node, test_ep)
-            if f > 0:
-                print(f)
-                print(node)
-                print()
+    find_entrypoint(graph, test_ep)
 
     # matches = find_entrypoint(graph, graph_interface, test_ep)
     # print(matches)
