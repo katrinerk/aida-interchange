@@ -399,18 +399,19 @@ def check_type(node, ep):
 
 
 def check_descriptor(graph, node, ep):
+    # Pull the justification information
+    justification_node_id_set = node.get('justifiedBy')
+    # If there is no justification information for this statement, return False
+    if not justification_node_id_set:
+        return False
+
+    justification_node_id = next(iter(justification_node_id_set))
+    justification_node = graph.get_node(justification_node_id)
+    if not justification_node:
+        return False
+
     # Handle TEXT type descriptors
     if ep["descriptor"]['type'] == "text":
-        justification_node_id_set = node.get('justifiedBy')
-        # If there is no justification information for this statement, return False
-        if not justification_node_id_set:
-            return False
-
-        justification_node_id = next(iter(justification_node_id_set))
-        justification_node = graph.get_node(justification_node_id)
-        if not justification_node:
-            return False
-
         # Check the justification type; if it doesn't match, return False
         justification_type = next(iter(justification_node.get("type", shorten=True)))
         if justification_type != "TextJustification":
@@ -427,6 +428,31 @@ def check_descriptor(graph, node, ep):
                 if justification_end_offset == ep['descriptor']['end']:
                     return True
         return False
+
+    if ep['descriptor']['type'] == 'image':
+        # Check the justification type; if it doesn't match, return False
+        justification_type = next(iter(justification_node.get("type", shorten=True)))
+        if justification_type != "ImageJustification":
+            return False
+
+        # Check the source information
+        justification_source = next(iter(justification_node.get("source"))).value.strip()
+        if justification_source == ep['descriptor']['doceid']:
+            bounding_box_id = next(iter(justification_node.get('boundingBox')))
+            bounding_box_node = graph.get_node(bounding_box_id)
+            bb_upper_left_x = str(next(iter(bounding_box_node.get('boundingBoxUpperLeftX'))).value).strip()
+            bb_upper_left_y = str(next(iter(bounding_box_node.get('boundingBoxUpperLeftY'))).value).strip()
+            bb_lower_right_x = str(next(iter(bounding_box_node.get('boundingBoxLowerRightX'))).value).strip()
+            bb_lower_right_y = str(next(iter(bounding_box_node.get('boundingBoxLowerRightY'))).value).strip()
+
+            ep_upper_left_x, ep_upper_left_y = ep['descriptor']['topleft'].strip().split(',')
+            ep_lower_right_x, ep_lower_right_y = ep['descriptor']['bottomright'].split(',')
+
+            if bb_upper_left_x == ep_upper_left_x and bb_upper_left_y == bb_upper_left_y:
+                if bb_lower_right_x == ep_lower_right_x and bb_lower_right_y == ep_lower_right_y:
+                    return True
+
+
     return False
 
 
@@ -456,11 +482,12 @@ def test_me():
     graph = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R103/.")
 
     for ep in soin.entrypoints:
-        if ep["descriptor"]["type"] == "text":
+        if ep["descriptor"]["type"] == "image":
             test_ep = ep
             break
 
     find_entrypoint(graph, test_ep)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Convert an XML-based Statement of Information Need definition to "
