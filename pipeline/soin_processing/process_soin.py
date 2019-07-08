@@ -381,7 +381,12 @@ def check_type(node, ep):
     :param ep: a dictionary representing an entrypoint definition (maintained in SOIN)
     :return num_matched: an integer representation of the number of typing classifications matched
     """
+    # t = node.get('object', shorten=True)
+    # print(t)
+    # input()
+
     types = next(iter(node.get("object", shorten=True))).strip().split('.')
+
 
     # Fix types to length 3 (in case subtype or subsubtype information was missing)
     for i in range(3 - len(types)):
@@ -429,7 +434,9 @@ def check_descriptor(graph, node, ep):
                     return True
         return False
 
-    if ep['descriptor']['type'] == 'image':
+    # Handle IMAGE type descriptors
+    # TODO: Is it possible that the original R103 example can't be found bc the justification is a compound one?
+    elif ep['descriptor']['type'] == 'image':
         # Check the justification type; if it doesn't match, return False
         justification_type = next(iter(justification_node.get("type", shorten=True)))
         if justification_type != "ImageJustification":
@@ -452,6 +459,50 @@ def check_descriptor(graph, node, ep):
                 if bb_lower_right_x == ep_lower_right_x and bb_lower_right_y == ep_lower_right_y:
                     return True
 
+    # Handle STRING descriptor types
+    elif ep['descriptor']['type'] == 'string':
+        subj_id = node.get('subject')
+        if not subj_id:
+            return False
+
+        subj_node = graph.get_node(next(iter(subj_id)))
+        if not subj_node:
+            return False
+        name_set = subj_node.get('hasName')
+        if not name_set:
+            return False
+        namestring = next(iter(name_set))
+
+        if namestring.strip() == ep['descriptor']['name_string']:
+            return True
+        return False
+
+    # Handle KB descriptor type
+    elif ep['descriptor']['type'] == 'kb':
+        subj_id = node.get('subject')
+        if not subj_id:
+            return False
+
+        subj_node = graph.get_node(next(iter(subj_id)))
+        if not subj_node:
+            return False
+
+        link_id = subj_node.get('link')
+        if not link_id:
+            return False
+
+        link_node = graph.get_node(next(iter(link_id)))
+        if not link_node:
+            return False
+
+        link_target_set = link_node.get('linkTarget')
+        if not link_target_set:
+            return False
+
+        link_target = next(iter(link_target_set)).value
+
+        if link_target.strip() == ep['descriptor']['kbid']:
+            return True
 
     return False
 
@@ -464,6 +515,7 @@ def find_entrypoint(graph, ep):
     :param ep: a dictionary representing the Entrypoint definition (maintained in SOIN)
     :return:
     """
+
     # Iterate through the nodes in the graph, looking for typing statements.
     for node in graph.nodes():
         if node.is_type_statement():
@@ -471,7 +523,8 @@ def find_entrypoint(graph, ep):
             # print(ep)
             types_matched = check_type(node, ep)
             descriptor_matched = check_descriptor(graph, node, ep)
-            if types_matched == 3 and descriptor_matched:
+            if descriptor_matched:
+                print(str(types_matched))
                 print("Winner winner!")
                 node.prettyprint()
 
@@ -479,13 +532,15 @@ def find_entrypoint(graph, ep):
 
 def test_me():
     soin = SOIN("/Users/eholgate/Desktop/SOIN/StatementOfInformationNeed_Example_M18/R103.xml")
-    graph = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R103/.")
+    # graph = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R103/.")
+    graph = load_graph("/Users/eholgate/Desktop/SOIN/colorado_TTL/.")
 
     for ep in soin.entrypoints:
-        if ep["descriptor"]["type"] == "image":
+        if ep["descriptor"]["type"] == "kb":
             test_ep = ep
             break
-
+    print(test_ep)
+    input()
     find_entrypoint(graph, test_ep)
 
 
@@ -508,6 +563,8 @@ def main():
             test_ep = ep
             break
 
+    print(ep)
+    input()
     matches = find_entrypoint(graph, graph_interface, test_ep)
     print(matches)
     print(len(matches))
@@ -525,20 +582,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-    find_entrypoint(graph, test_ep)
-
-    # matches = find_entrypoint(graph, graph_interface, test_ep)
-    # print(matches)
-    # print(len(matches))
-
-
-
-def write_output():
-    """Write the output """
-    return None
 
 
 ##############################
