@@ -593,7 +593,7 @@ def main():
          }
 
     writeme = {
-        "graph": parser.graph_in,
+        "graph": args.graph_in,
         "queries": [],
         "facets": [],
     }
