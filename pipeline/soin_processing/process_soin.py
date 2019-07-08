@@ -32,43 +32,45 @@ class UnexpectedXMLTag(Exception):
     """
     pass
 
+
 class SOIN:
     def __init__(self, in_path):
         self.frames, self.temporal_info, self.entrypoints = self._process_xml(in_path)
         self.json = {}
 
-    def __repr__(self):
-        hrule = "========================================"
-        print("This run will test the parse of the input XML.")
-        print(hrule + "\n\n")
+    def __str__(self):
+        returnme = ""
+        returnme += "========================================"
+        returnme += "This run will test the parse of the input XML."
+        returnme += "========================================\n\n"
 
-        print("Frames:\n")
+        returnme += "Frames:\n"
         for frame in self.frames:
-            print("Frame: " + frame)
+            returnme += "Frame: " + frame
             for edge in self.frames[frame]:
-                print("\tEdge: " + edge)
+                returnme += "\tEdge: " + edge
                 for rel in self.frames[frame][edge]:
-                    print("\t\t" + rel)
+                    returnme += "\t\t" + rel
 
-        print(hrule + "\n\n")
+        returnme += "========================================\n\n"
 
-        print("Temporal Information:\n")
+        returnme += "Temporal Information:\n"
         for subject in self.temporal_info:
-            print("Subject: " + subject)
+            returnme += "Subject: " + subject
             for time in self.temporal_info[subject]:
-                print("\t" + time + ": ")
+                returnme += "\t" + time + ": "
                 for unit in self.temporal_info[subject][time]:
-                    print("\t\t" + unit + ": " + self.temporal_info[subject][time][unit])
+                    returnme += "\t\t" + unit + ": " + self.temporal_info[subject][time][unit]
 
-        print(hrule + "\n\n")
+        returnme += "========================================\n\n"
 
-        print("EPs:\n")
+        returnme += "EPs:\n"
         for ep_num, ep_dict in enumerate(self.entrypoints):
-            print("EP " + str(ep_num + 1) + " : ")
+            returnme += "EP " + str(ep_num + 1) + " : "
             for k in ep_dict:
-                print("\t" + k + ": " + str(ep_dict[k]))
+                returnme += "\t" + k + ": " + str(ep_dict[k])
 
-        return ""
+        return returnme
 
     @staticmethod
     def _process_xml(in_path):
@@ -353,9 +355,293 @@ class SOIN:
 def load_graph(in_dir):
     """
     This is a function to load a graph into memory.
+    :param in_dir:
+    :return:
+    """
+    turtles = []
+    for file in os.listdir(in_dir):
+        if file.endswith(".ttl"):
+            turtles.append(os.path.join(in_dir, file))
+        # Create an empty AidaGraph, then add the contents of each TTL to it.
+    graph = AidaGraph()
+    for file in turtles:
+        subgraph = rdflib.Graph()
+        subgraph.parse(file, format="ttl")
+        graph.add_graph(subgraph)
+
+    return graph
+
+
+def check_type(node, ep):
+    """
+    A function which determines the extent to which a given AidaGraph node and Entrypoint definition contain matching
+    type statements.
+
+    :param node: an AidaGraph typing statement node.
+    :param ep: a dictionary representing an entrypoint definition (maintained in SOIN)
+    :return num_matched: an integer representation of the number of typing classifications matched
+    """
+    # t = node.get('object', shorten=True)
+    # print(t)
+    # input()
+
+    types = next(iter(node.get("object", shorten=True))).strip().split('.')
+
+
+    # Fix types to length 3 (in case subtype or subsubtype information was missing)
+    for i in range(3 - len(types)):
+        types.append("")
+
+    num_matched = 0
+    if types[0].lower().strip() == ep['ent_type'].lower().strip():
+        num_matched += 1
+        if types[1].lower().strip() == ep['ent_subtype'].lower().strip():
+            num_matched += 1
+            if types[2].lower().strip() == ep['ent_subsubtype'].lower().strip():
+                num_matched += 1
+
+    return num_matched
+
+
+def check_descriptor(graph, node, ep):
+    # Pull the justification information
+    justification_node_id_set = node.get('justifiedBy')
+    # If there is no justification information for this statement, return False
+    if not justification_node_id_set:
+        return False
+
+    justification_node_id = next(iter(justification_node_id_set))
+    justification_node = graph.get_node(justification_node_id)
+    if not justification_node:
+        return False
+
+    # Handle TEXT type descriptors
+    if ep["descriptor"]['type'] == "text":
+        # Check the justification type; if it doesn't match, return False
+        justification_type = next(iter(justification_node.get("type", shorten=True)))
+        if justification_type != "TextJustification":
+            return False
+
+        justification_source = next(iter(justification_node.get("source"))).value.strip()
+        # Check the source document ID
+        if justification_source == ep['descriptor']['doceid']:
+            justification_start_offset = str(next(iter(justification_node.get("startOffset"))).value).strip()
+            justification_end_offset = str(next(iter(justification_node.get("endOffsetInclusive"))).value).strip()
+
+            # Check the character offsets
+            if justification_start_offset == ep['descriptor']['start']:
+                if justification_end_offset == ep['descriptor']['end']:
+                    return True
+        return False
+
+    # Handle IMAGE type descriptors
+    # TODO: Is it possible that the original R103 example can't be found bc the justification is a compound one?
+    elif ep['descriptor']['type'] == 'image':
+        # Check the justification type; if it doesn't match, return False
+        justification_type = next(iter(justification_node.get("type", shorten=True)))
+        if justification_type != "ImageJustification":
+            return False
+
+        # Check the source information
+        justification_source = next(iter(justification_node.get("source"))).value.strip()
+        if justification_source == ep['descriptor']['doceid']:
+            bounding_box_id = next(iter(justification_node.get('boundingBox')))
+            bounding_box_node = graph.get_node(bounding_box_id)
+            bb_upper_left_x = str(next(iter(bounding_box_node.get('boundingBoxUpperLeftX'))).value).strip()
+            bb_upper_left_y = str(next(iter(bounding_box_node.get('boundingBoxUpperLeftY'))).value).strip()
+            bb_lower_right_x = str(next(iter(bounding_box_node.get('boundingBoxLowerRightX'))).value).strip()
+            bb_lower_right_y = str(next(iter(bounding_box_node.get('boundingBoxLowerRightY'))).value).strip()
+
+            ep_upper_left_x, ep_upper_left_y = ep['descriptor']['topleft'].strip().split(',')
+            ep_lower_right_x, ep_lower_right_y = ep['descriptor']['bottomright'].split(',')
+
+            if bb_upper_left_x == ep_upper_left_x and bb_upper_left_y == bb_upper_left_y:
+                if bb_lower_right_x == ep_lower_right_x and bb_lower_right_y == ep_lower_right_y:
+                    return True
+
+    # Handle STRING descriptor types
+    elif ep['descriptor']['type'] == 'string':
+        subj_id = node.get('subject')
+        if not subj_id:
+            return False
+
+        subj_node = graph.get_node(next(iter(subj_id)))
+        if not subj_node:
+            return False
+        name_set = subj_node.get('hasName')
+        if not name_set:
+            return False
+        namestring = next(iter(name_set))
+
+        if namestring.strip() == ep['descriptor']['name_string']:
+            return True
+        return False
+
+    # Handle KB descriptor type
+    elif ep['descriptor']['type'] == 'kb':
+        subj_id = node.get('subject')
+        if not subj_id:
+            return False
+
+        subj_node = graph.get_node(next(iter(subj_id)))
+        if not subj_node:
+            return False
+
+        link_id = subj_node.get('link')
+        if not link_id:
+            return False
+
+        link_node = graph.get_node(next(iter(link_id)))
+        if not link_node:
+            return False
+
+        link_target_set = link_node.get('linkTarget')
+        if not link_target_set:
+            return False
+
+        link_target = next(iter(link_target_set)).value
+
+        if link_target.strip() == ep['descriptor']['kbid']:
+            return True
+
+    return False
+
+
+def find_entrypoint(graph, ep):
+    """
+    This function resolves an Entrypoint definition to an AidaGraph node.
+
+    :param graph: an AidaGraph object
+    :param ep: a dictionary representing the Entrypoint definition (maintained in SOIN)
+    :return:
+    """
+    results = {
+        0: {True: [], False: []},
+        1: {True: [], False: []},
+        2: {True: [], False: []},
+        3: {True: [], False: []},
+    }
+    # Iterate through the nodes in the graph, looking for typing statements.
+    for node in graph.nodes():
+        if node.is_type_statement():
+            types_matched = check_type(node, ep)
+            descriptor_matched = check_descriptor(graph, node, ep)
+
+            # Get the Entity node this statement describes
+            ent_node = graph.get_node(next(iter(node.get('subject'))))
+            results[types_matched][descriptor_matched].append(ent_node.name.split('#')[-1])
+
+    # TODO: There's probably something smarter to do here - let's talk about it?
+    if results[3][True]:
+        return results[3][True].pop()
+    elif results[2][True]:
+        return results[2][True].pop()
+    elif results[1][True]:
+        return results[1][True].pop()
+    elif results[0][True]:
+        return results[0][True].pop()
+
+    if results[3][False]:
+        return results[3][False].pop()
+    elif results[2][False]:
+        return results[2][False].pop()
+    elif results[1][False]:
+        return results[1][False].pop()
+    elif results[0][False]:
+        return results[0][False].pop()
+
+
+
+def test_me():
+    soin = SOIN("/Users/eholgate/Desktop/SOIN/StatementOfInformationNeed_Example_M18/R103.xml")
+    graph = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R103/.")
+    # graph = load_graph("/Users/eholgate/Desktop/SOIN/colorado_TTL/.")
+
+    for ep in soin.entrypoints:
+        if ep["descriptor"]["type"] == "text":
+            test_ep = ep
+            break
+    # print(test_ep)
+    # input()
+    result = find_entrypoint(graph, test_ep)
+    print(result)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Convert an XML-based Statement of Information Need definition to "
+                                                 "the JSON-compliant UT Austin internal representation, "
+                                                 "then identify and rank entrypoint nodes to be passed downstream.")
+    parser.add_argument("soin_in", action="store", help="The path to the input XML")
+    parser.add_argument("graph_in", action="store", help="The path to the input TTLs")
+    parser.add_argument("out_path", action="store", help="The output path.")
+    args = parser.parse_args()
+
+    print("Parsing SOIN XML...")
+    soin = SOIN(args.soin_in)
+    # soin = SOIN("/Users/eholgate/Desktop/SOIN/StatementOfInformationNeed_Example_M18/R103.xml")
+    print("\tDone.\n")
+
+    print("Loading Graph...")
+    graph = load_graph(args.graph_in)
+    print("\tDone.\n")
+
+    facet_template = {
+        "ERE": [],
+        "temporal": soin.temporal_info,
+        "statements": [],
+        "queryConstraints": {},
+         }
+
+    writeme = {
+        "graph": args.graph_in,
+        "queries": [],
+        "facets": [],
+    }
+
+    print("Resolving Entrypoints...")
+    for ep in soin.entrypoints:
+        ep_node = find_entrypoint(graph, ep)
+        facet_template['ERE'].append(ep_node)
+    print("\tDone.\n")
+
+    print("Formatting output...")
+    for frame, constraints in soin.frames.items():
+        facet = deepcopy(facet_template)
+        facet['queryConstraints'] = constraints
+        writeme['facets'].append(facet)
+    print("\tDone.\n")
+
+    print("Writing output...")
+    with open(args.out_path, 'w') as out:
+        json.dump(writeme, out, indent=1)
+    print("\tDone.\n")
+    # # Return a list of possible matches
+    # matches = []
+    # for statement in graph_interface.json_obj['statements']:
+    #     if check_type(graph_interface.json_obj['theGraph'][statement], test_ep):
+    #         matches.append(statement)
+    #
+    # print(matches)
+
+
+
+
+
+if __name__ == "__main__":
+    main()
+
+
+##############################
+#    DEPRECATED FUNCTIONS    #
+##############################
+def _deprecated_load_graph(in_dir):
+    """
+    DEPRECATED: This has been replaced with load_graph(), which does not utilize JsonInterface
+    This is a function to load a graph into memory.
 
     :param in_dir: The directory containing the TTL files.
-    :return: A JSON graph object
+    :return graph: an AidaGraph object
+    :return graph_interface: a JsonInterface object
     """
     turtles = []
     for file in os.listdir(in_dir):
@@ -372,10 +658,12 @@ def load_graph(in_dir):
     # Convert the AidaGraph to a JSON Representation
     interface_object = JsonInterface(graph, simplification_level=0)
 
-    return interface_object
+    return graph, interface_object
 
-def check_type(node, ep):
+def _deprecated_check_type_json_interface(node, ep):
     """
+    DEPRECATED: This function has been replaced by check_type() which operates on AidaNode input instead of
+                JsonInterface input.
     This is a function to check if the typing statement of a node matches the type constraints of a query.
 
     :param node:
@@ -395,12 +683,12 @@ def check_type(node, ep):
 
         return False
 
-
-
-def find_entrypoint(graph_interface, ep):
+def _deprecated_find_entrypoint(graph, graph_interface, ep):
     """
+    DEPRECATED: this function has been replaced by find_entrypoint() which does not utilize JsonInterface input.
     This function identifies the node address in the graph for the specified entrypoint description.
 
+    :param graph:
     :param graph_interface:
     :param ep:
     :return:
@@ -409,8 +697,10 @@ def find_entrypoint(graph_interface, ep):
 
     # Iterate through all statement nodes:
     for statement in graph_interface.json_obj["statements"]:
+        print("huh")
         # Check to see if this is a Type statement that matches the entrypoint criteria
         if check_type(graph_interface.json_obj["theGraph"][statement], ep):
+            print("Checking type")
             # Check Justification information based on Descriptor type
 
             # Handle text descriptors
@@ -430,8 +720,6 @@ def find_entrypoint(graph_interface, ep):
                             just_node["endOffsetInclusive"][0].value == int(ep["descriptor"]["end"]):
                         matches.append(statement)
 
-
-
             # TODO: There is a bug here preventing us from finding the image-based entrypoint in the sample SOIN.
             #  I don't *think* the issue is in this code. I still need to check to see if I can find the node in the
             #  raw AIF.
@@ -439,7 +727,6 @@ def find_entrypoint(graph_interface, ep):
             #  in the LDC graph...
             #  In the meantime, consider this condition unimplemented.
             elif ep["descriptor"]["type"] == "image":
-                print("Entering.")
                 # Check to make sure there is justification information for this node
                 if statement not in graph_interface.json_just_obj:
                     continue
@@ -452,9 +739,9 @@ def find_entrypoint(graph_interface, ep):
                 if just_node["source"][0].value == ep["descriptor"]["doceid"]:
                     # Check the bounding box
                     print(just_node)
-                    input()
+                    # input()
 
-            # TODO: This can be pulled out to make this code more efficient. Currenlty it's iterating through all
+            # TODO: This can be pulled out to make this code more efficient. Currently it's iterating through all
             #  ERE's many times
             elif ep["descriptor"]["type"] == "string":
                 for entity in graph_interface.json_obj["ere"]:
@@ -468,70 +755,14 @@ def find_entrypoint(graph_interface, ep):
                                     matches.append(statement)
                                     break
 
-            elif ep["descriptor"]["type"]["kb"]:
-                # TODO: Where do the background KB addresses live in the JSON / AIF
-                pass
-
+            # Handle KB descriptors; this requires searching the AidaGraph representation, as this information is not
+            # maintained in the JSON representation.
+            elif ep["descriptor"]["type"] == "kb":
+                print("ENTERING!!!")
+                # First, check typing equivalence
+                print(graph_interface.json_obj["theGraph"][statement].keys())
+                # node_address = graph_interface.json_obj["theGraph"][statement]["name"]
+                for n in graph.nodes():
+                    if n.name.strip() == statement:
+                        pass
     return matches
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Convert an XML-based Statement of Information Need definition to "
-                                                 "the JSON-compliant UT Austin internal representation, "
-                                                 "then identify and rank entrypoint nodes to be passed downstream.")
-    parser.add_argument("soin_in", action="store", help="The path to the input XML")
-    args = parser.parse_args()
-
-    soin = SOIN(args.soin_in)
-    print(soin)
-
-    graph_interface = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4"
-                                       "/Annotation_Generated_V4_Valid/R103/.")
-
-    for ep in soin.entrypoints:
-        if ep["descriptor"]["type"] == "string":
-            test_ep = ep
-            break
-
-    matches = find_entrypoint(graph_interface, test_ep)
-    print(matches)
-    print(len(matches))
-    # # Return a list of possible matches
-    # matches = []
-    # for statement in graph_interface.json_obj['statements']:
-    #     if check_type(graph_interface.json_obj['theGraph'][statement], test_ep):
-    #         matches.append(statement)
-    #
-    # print(matches)
-
-
-
-
-
-if __name__ == "__main__":
-    main()
-
-
-
-
-
-
-
-
-
-
-
-
-def find_entrypoint(ep_specs):
-    """
-    This function will search the input graph for nodes that match a given entrypoint specification.
-
-    :param ep_specs:
-    :return:
-    """
-    return None
-
-
-def write_output():
-    """Write the output """
-    return None
