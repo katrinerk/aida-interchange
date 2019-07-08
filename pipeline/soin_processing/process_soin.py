@@ -515,33 +515,56 @@ def find_entrypoint(graph, ep):
     :param ep: a dictionary representing the Entrypoint definition (maintained in SOIN)
     :return:
     """
-
+    results = {
+        0: {True: [], False: []},
+        1: {True: [], False: []},
+        2: {True: [], False: []},
+        3: {True: [], False: []},
+    }
     # Iterate through the nodes in the graph, looking for typing statements.
     for node in graph.nodes():
         if node.is_type_statement():
-            # Determine the number of typing classifications that match
-            # print(ep)
             types_matched = check_type(node, ep)
             descriptor_matched = check_descriptor(graph, node, ep)
-            if descriptor_matched:
-                print(str(types_matched))
-                print("Winner winner!")
-                node.prettyprint()
 
-            # Check descriptor information for match
+            # Get the Entity node this statement describes
+            ent_node = graph.get_node(next(iter(node.get('subject'))))
+            results[types_matched][descriptor_matched].append(ent_node.name.split('#')[-1])
+
+    # TODO: There's probably something smarter to do here - let's talk about it?
+    if results[3][True]:
+        return results[3][True].pop()
+    elif results[2][True]:
+        return results[2][True].pop()
+    elif results[1][True]:
+        return results[1][True].pop()
+    elif results[0][True]:
+        return results[0][True].pop()
+
+    if results[3][False]:
+        return results[3][False].pop()
+    elif results[2][False]:
+        return results[2][False].pop()
+    elif results[1][False]:
+        return results[1][False].pop()
+    elif results[0][False]:
+        return results[0][False].pop()
+
+
 
 def test_me():
     soin = SOIN("/Users/eholgate/Desktop/SOIN/StatementOfInformationNeed_Example_M18/R103.xml")
-    # graph = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R103/.")
-    graph = load_graph("/Users/eholgate/Desktop/SOIN/colorado_TTL/.")
+    graph = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R103/.")
+    # graph = load_graph("/Users/eholgate/Desktop/SOIN/colorado_TTL/.")
 
     for ep in soin.entrypoints:
-        if ep["descriptor"]["type"] == "kb":
+        if ep["descriptor"]["type"] == "text":
             test_ep = ep
             break
-    print(test_ep)
-    input()
-    find_entrypoint(graph, test_ep)
+    # print(test_ep)
+    # input()
+    result = find_entrypoint(graph, test_ep)
+    print(result)
 
 
 def main():
@@ -549,25 +572,49 @@ def main():
                                                  "the JSON-compliant UT Austin internal representation, "
                                                  "then identify and rank entrypoint nodes to be passed downstream.")
     parser.add_argument("soin_in", action="store", help="The path to the input XML")
+    parser.add_argument("graph_in", action="store", help="The path to the input TTLs")
+    parser.add_argument("out_path", action="store", help="The output path.")
     args = parser.parse_args()
 
+    print("Parsing SOIN XML...")
     soin = SOIN(args.soin_in)
-    soin = SOIN("/Users/eholgate/Desktop/SOIN/StatementOfInformationNeed_Example_M18/R103.xml")
-    print(soin)
+    # soin = SOIN("/Users/eholgate/Desktop/SOIN/StatementOfInformationNeed_Example_M18/R103.xml")
+    print("\tDone.\n")
 
-    graph, graph_interface = load_graph("/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/" +
-                                        "Annotation_Generated_V4_Valid/R103/.")
+    print("Loading Graph...")
+    graph = load_graph(args.graph_in)
+    print("\tDone.\n")
 
+    facet_template = {
+        "ERE": [],
+        "temporal": soin.temporal_info,
+        "statements": [],
+        "queryConstraints": {},
+         }
+
+    writeme = {
+        "graph": parser.graph_in,
+        "queries": [],
+        "facets": [],
+    }
+
+    print("Resolving Entrypoints...")
     for ep in soin.entrypoints:
-        if ep["descriptor"]["type"] == "kb":
-            test_ep = ep
-            break
+        ep_node = find_entrypoint(graph, ep)
+        facet_template['ERE'].append(ep_node)
+    print("\tDone.\n")
 
-    print(ep)
-    input()
-    matches = find_entrypoint(graph, graph_interface, test_ep)
-    print(matches)
-    print(len(matches))
+    print("Formatting output...")
+    for frame, constraints in soin.frames.items():
+        facet = deepcopy(facet_template)
+        facet['queryConstraints'] = constraints
+        writeme['facets'].append(facet)
+    print("\tDone.\n")
+
+    print("Writing output...")
+    with open(args.out_path, 'w') as out:
+        json.dump(writeme, out, indent=1)
+    print("\tDone.\n")
     # # Return a list of possible matches
     # matches = []
     # for statement in graph_interface.json_obj['statements']:
