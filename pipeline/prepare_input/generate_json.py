@@ -62,6 +62,9 @@ logging.info('Building json representation of the AIF graph...')
 json_obj = JsonInterface(mygraph, simplification_level=0)
 logging.info('Done.')
 
+logging.info('Simplify subsubtypes...')
+json_obj.simplify_subsubtypes()
+
 logging.info('Writing output to {}...'.format(output_filename))
 logging.info('and justifications to {}...'.format(output_just_filename))
 outf = open(output_filename, 'w')

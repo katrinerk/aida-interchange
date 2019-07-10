@@ -8,6 +8,7 @@
 import json
 import logging
 from tqdm import tqdm
+from rdflib.namespace import split_uri
 
 
 ###########
@@ -553,4 +554,20 @@ class JsonInterface:
         ## textjustifications = list(self.mygraph.sources_and_textjust_associated_with(node.name))
         ## if len(textjustifications) > 0:
         ##     self.json_just_obj[node.name] = textjustifications                
-                    
+
+    def simplify_subsubtypes(self):
+        for stmt_name, stmt_node in self.json_obj['theGraph'].items():
+            if stmt_node['type'] == 'Statement' and stmt_node.get('predicate', None) == 'type':
+                type_str = stmt_node.get('object', None)
+                if type_str is not None:
+                    type_namespace, type_name = split_uri(type_str)
+                    if len(type_name.split('.')) > 2:
+                        assert len(type_name.split('.')) == 3
+                        new_type_name, subsubtype = type_name.rsplit('.', maxsplit=1)
+                        if '_' in subsubtype:
+                            assert len(subsubtype.split('_')) == 2
+                            role_name = subsubtype.split('_')[1]
+                            new_type_name = '{}_{}'.format(new_type_name, role_name)
+
+                        new_type_str = type_namespace + new_type_name
+                        stmt_node['object'] = new_type_str
