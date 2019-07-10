@@ -267,7 +267,7 @@ class JsonInterface:
 
             # now add a handle for all clusters that are missing one
             for cluster in clusters_without_handles:
-                if cluster in cluster_names:
+                if cluster in cluster_names and len(cluster_names[cluster]) > 0:
                     # grab the shortest name
                     self.json_obj["theGraph"][cluster]["handle"] = min(cluster_names[cluster], key = lambda n:len(n))
                 else:
