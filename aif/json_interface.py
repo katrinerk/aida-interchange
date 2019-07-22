@@ -269,7 +269,10 @@ class JsonInterface:
             for cluster in clusters_without_handles:
                 if cluster in cluster_names:
                     # grab the shortest name
-                    self.json_obj["theGraph"][cluster]["handle"] = min(cluster_names[cluster], key = lambda n:len(n))
+                    if len(cluster_names[cluster]) > 0:
+                        self.json_obj["theGraph"][cluster]["handle"] = min(cluster_names[cluster], key = lambda n:len(n))
+                    else:
+                        self.json_obj["theGraph"][cluster]["handle"] = "[unknown]"                        
                 else:
                     self.json_obj["theGraph"][cluster]["handle"] = "[unknown]"
         
