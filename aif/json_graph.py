@@ -119,16 +119,31 @@ class AidaJson:
     ###
     # possible affiliations of an ERE: IDs of affiliation EREs
     def possible_affiliations(self, erelabel):
-        affiliations = set() 
-        for affiliatestmtlabel in self.each_ere_adjacent_stmt(erelabel, "GeneralAffiliation.APORA_Affiliate", "object"):
-            
-            relationlabel = self.thegraph[affiliatestmtlabel]["subject"]
-            for affiliationstmtlabel in self.each_ere_adjacent_stmt(relationlabel, "GeneralAffiliation.APORA_Affiliation", "subject"):
-                affiliationlabel = self.thegraph[affiliationstmtlabel]["object"]
-                affiliations.add(affiliationlabel)
+        return [ self.stmt_subject(stmt2) for stmt1, rel, stmt2 in self.possible_affiliation_triples(erelabel) ]
+
+    ###
+    # possible affiliation relations of an ERE: IDs of affiliations relations in which the ERE is the affiliate
+    def possible_affiliation_relations(self, erelabel):
+        return [rel for stmt1, rel, stmt2 in self.possible_affiliation_triples(erelabel)]
+
+    ###
+    # affiliation info for an ERE:
+    # triples of
+    # (statement connecting the ERE to its affiliation relation,
+    #  affiliation relation,
+    # statement connecting the affiliation relation to the affiliation)
+    def possible_affiliation_triples(self, erelabel):
+        affiliations = set()
+        for stmt1 in self.each_ere_adjacent_stmt_anyrel(erelabel):
+            if self.stmt_object(stmt1) == erelabel and self.is_affiliate_rolelabel(self.stmt_predicate(stmt1)):
+                affiliation_rel = self.stmt_subject(stmt1)
+                for stmt2 in self.each_ere_adjacent_stmt_anyrel(affiliation_rel):
+                    if self.stmt_subject(stmt2) == affiliation_rel and self.is_affiliation_rolelabel(self.stmt_predicate(stmt2)):
+                        affiliations.add( (stmt1, affiliation_rel, stmt2))
 
         return affiliations
-
+        
+    
     ####
     # names, if any
     def ere_names(self, erelabel):
@@ -147,7 +162,7 @@ class AidaJson:
     # - ere type (nodetype)
     # - names ("name")
     # - type statements associated ("typestmt")
-    # - affiliation in terms of APORA ("affiliation")
+    # - affiliation
     def ere_characterization(self, erelabel):
         retv = { }
 
@@ -325,3 +340,53 @@ class AidaJson:
             if stmtnode["object"] not in self.thegraph:
                 yield stmtnode["object"]
                 yield self.shorten_label(stmtnode["object"])
+
+    #####################################3
+    # ontology mapping issues
+    ##
+    # role labels of affiliates in an affiliation
+    def is_affiliate_rolelabel(self, label):
+        if not label.startswith("GeneralAffiliation") and not label.startswith("OrganizationAffiliation"):
+            return False
+
+        rolelabels = [ "Affiliate", "MORE_Person", "Sponsorship_Entity",
+                           "EmploymentMembership_Employee", "Founder_Founder",
+                           "InvestorShareholder_InvestorShareholder", "ControlTerritory_Controller",
+                           "NationalityCitizen_Artifact", "OwnershipPossession_Artifact",
+                           "ArtifactPoliticalOrganizationReligiousAffiliation_Artifact",
+                           "Ethnicity_Person", "NationalityCitizen_Citizen",
+                           "MemberOriginReligionEthnicity_Person", "NationalityCitizen_Organization", 
+                           "OrganizationPoliticalReligiousAffiliation_Organization",
+                           "OrganizationWebsite_Organization", "AdvisePlanOrganize_ActorOrEvent", 
+                           "Affiliated_ActorOrEvent", "HelpSupport_ActorOrEvent", "Sponsorship_ActorOrEvent",
+                           "Leadership_Leader", "Ownership_Organization", "StudentAlum_StudentAlum"]
+
+        if any(label.endswith(r) for r in rolelabels):
+            return True
+
+        return False
+
+    def is_affiliation_rolelabel(self, label):
+        if not label.startswith("GeneralAffiliation") and not label.startswith("OrganizationAffiliation"):
+            return False
+
+        rolelabels = [ "Affiliation", "OPRA_Organization", "Sponsorship_Sponsor",
+                           "EmploymentMembership_Organization", "Founder_Organization",
+                           "ControlTerritory_Territory", "NationalityCitizen_Nationality",
+                           "OwnershipPossession_Owner",
+                           "ArtifactPoliticalOrganizationReligiousAffiliation_EntityOrFiller",
+                           "Ethnicity_Ethnicity", "NationalityCitizen_Nationality",
+                           "MemberOriginReligionEthnicity_EntityOrFiller",
+                           "OrganizationPoliticalReligiousAffiliation_EntityOrFiller",
+                           "OrganizationWebsite_Website", "AdvisePlanOrganize_Sponsor",
+                           "Affiliated_Sponsor", "HelpSupport_Sponsor", "Sponsorship_Sponsor",
+                           "InvestorShareholder_Organization", "Leadership_Organization",
+                           "Ownership_Owner", "StudentAlum_Organization"]
+
+        if any(label.endswith(r) for r in rolelabels):
+            return True
+        
+        return False
+
+    def rolelabel_isa(self, label, eventrel_class, rolelabel):
+        if label.startswith(eventrel_class) and label.endswith(rolelabel): return True
