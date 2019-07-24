@@ -102,7 +102,7 @@ class ClusterExpansion:
                     # possibly multiple affiliation statements, but all point to the same affiliation.
                     # add one of them. 
                     for stmt1, affiliationrel, stmt2 in self.graph_obj.possible_affiliation_triples(ere):
-                        print("HIER affiliation", ere, self.graph_obj.stmt_predicate(stmt1), stmt1, affiliationrel, stmt2, self.graph_obj.stmt_object(stmt2), self.graph_obj.thegraph[self.graph_obj.stmt_object(stmt2)].get("name", []))
+                        # print("HIER affiliation", ere, self.graph_obj.stmt_predicate(stmt1), stmt1, affiliationrel, stmt2, self.graph_obj.stmt_object(stmt2), self.graph_obj.thegraph[self.graph_obj.stmt_object(stmt2)].get("name", []))
                         hypothesis.add_stmt(stmt1)
                         hypothesis.add_stmt(stmt2)
                         break
