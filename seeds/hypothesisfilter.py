@@ -85,8 +85,13 @@ class AidaHypothesisFilter:
 
         # okay, we have an event or relation.
         # check whether this ere has another type
-        if len(stmt for stmt in self.graph_obj.each_ere_adjacent_stmt(ere, "type", "subject")) > 1:
+        types = [type_ere for type_ere in hypothesis.ere_each_type(ere)]
+        if len(types) > 1:
+            print("HIER1 flagging type stmt", test_stmt, types)
             return False
+        ## if len([stmt for stmt in self.graph_obj.each_ere_adjacent_stmt(ere, "type", "subject")]) > 1:
+        ##     print("HIER1 flagging type stmt", test_stmt)
+        ##     return False
 
         return True
         
@@ -121,7 +126,8 @@ class AidaHypothesisFilter:
     # do this by starting a new hypothesis and re-inserting statements there by statement weight,
     # using the validate function
     def filtered(self, hypothesis):
-
+        print("HIER0", len(hypothesis.stmts), hypothesis.stmts)
+        
         # new hypothesis: "incremental" because we add in things one at a time.
         # start with the core statements
         incr_hypothesis = AidaHypothesis(self.graph_obj, stmts = hypothesis.core_stmts.copy(),
@@ -132,6 +138,8 @@ class AidaHypothesisFilter:
         incr_hypothesis.add_qvar_filler(hypothesis.qvar_filler)
         incr_hypothesis_eres = set(incr_hypothesis.eres())
 
+        print("HIER0.5 incr hyp", len(incr_hypothesis.stmts), incr_hypothesis.stmts)
+
         # all other statements are candidates, sorted by their weights in the hypothesis, highest first
         candidates = [ stmt for stmt in hypothesis.stmts if stmt not in hypothesis.core_stmts]
         candidates.sort(key = lambda stmt:hypothesis.stmt_weights[stmt], reverse = True)
@@ -140,19 +148,26 @@ class AidaHypothesisFilter:
         # candidates are set aside if they currently don't connect to any ERE in the incremental hypothesis
         candidates_set_aside = deque()
 
-        def insert_candidate(stmt):
-            incr_hypothesis.add_stmt(stmt, weight = hypothesis.stmt_weights[stmt])
-            for nodelabel in [ self.graph_obj.stmt_subject(stmt), self.graph_obj.stmt_object(stmt) ]:
-                if self.graph_obj.is_ere(nodelabel):
-                    incr_hypothesis_eres.add(nodelabel)
-
+        def test_and_insert_candidate(stmt):
+            testhypothesis = incr_hypothesis.extend(stmt, weight = hypothesis.stmt_weights[stmt])
+            
+            if self.validate(testhypothesis, stmt):
+                # yes, statement is fine. add the statement's EREs to the incremental EREs
+                for nodelabel in [ self.graph_obj.stmt_subject(stmt), self.graph_obj.stmt_object(stmt) ]:
+                    if self.graph_obj.is_ere(nodelabel):
+                        incr_hypothesis_eres.add(nodelabel)
+                # retain the extended hypothesis
+                return testhypothesis
+            else:
+                # don't add stmt after all
+                return incr_hypothesis
+        
         def check_candidates_set_aside():
             for stmt in candidates_set_aside:
                 if self.graph_obj.stmt_subject(stmt) in incr_hypothesis_eres or self.graph_obj.stmt_object(stmt) in incr_hypothesis_eres:
                     # yes, check now whether this candidate should be inserted
                     candidates_set_aside.remove( stmt)
-                    if self.validate(incr_hypothesis, stmt):
-                        insert_candidate(stmt)
+                    incr_hypothesis = test_and_insert_candidate(stmt)
             
 
         while len(candidates) > 0:
@@ -161,13 +176,13 @@ class AidaHypothesisFilter:
 
             # now test the next non-set-aside candidate
             stmt = candidates.popleft()
-            if self.validate(incr_hypothesis, stmt):
-                insert_candidate(stmt)
+            incr_hypothesis = test_and_insert_candidate(stmt)
 
         # no candidates left in the candidate set, but maybe something from the set-aside candidate list
         # has become connected to the core by the last candidate to be added
         check_candidates_set_aside()
-        
+
+        print("HIER2 remaining", len(incr_hypothesis.stmts), incr_hypothesis.stmts)
         return incr_hypothesis
         
 
