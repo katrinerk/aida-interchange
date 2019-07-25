@@ -72,9 +72,15 @@ class AidaJson:
     def is_ere(self, nodelabel):
         return self.is_entity(nodelabel) or self.is_event(nodelabel) or self.is_relation(nodelabel)
 
-    def is_typestmt(self, nodelabel):
-        return self.is_statement(nodelabel) and self.thegraph[nodelabel]["predicate"] == "type"
+    def is_typestmt(self, stmtlabel):
+        return self.is_statement(stmtlabel) and self.thegraph[stmtlabel]["predicate"] == "type"
 
+    def is_eventrole_stmt(self, stmtlabel):
+        return self.is_statement(stmtlabel) and self.is_event(self.stmt_subject(stmtlabel)) and self.is_ere(self.stmt_object(stmtlabel))
+
+    def is_relationrole_stmt(self, stmtlabel):
+        return self.is_statement(stmtlabel) and self.is_relation(self.stmt_subject(stmtlabel)) and self.is_ere(self.stmt_object(stmtlabel))
+    
     def stmt_subject(self, stmtlabel):
         if not self.is_statement(stmtlabel):
             return None

@@ -17,7 +17,7 @@ class AidaHypothesis:
         if stmts is None:
             self.stmts = set()
         else:
-            self.stmts = stmts
+            self.stmts = set(stmts)
 
         if stmt_weights is None:
             self.stmt_weights = { }
@@ -27,7 +27,7 @@ class AidaHypothesis:
         if core_stmts is None:
             self.core_stmts = set()
         else:
-            self.core_stmts = core_stmts
+            self.core_stmts = set(core_stmts)
 
         # failed queries are added from outside, as they are needed in the json object
         self.failed_queries = [ ]
@@ -58,12 +58,12 @@ class AidaHypothesis:
         elif core:
             self.stmt_weights[stmtlabel ] = 0.0
 
-    def extend(self, stmtlabel, core = False):
+    def extend(self, stmtlabel, core = False, weight = None):
         if stmtlabel in self.stmts:
             return self
         
         new_hypothesis = self.copy()
-        new_hypothesis.add_stmt(stmtlabel, core = core)
+        new_hypothesis.add_stmt(stmtlabel, core = core, weight = weight)
         return new_hypothesis
 
     def copy(self):
@@ -358,3 +358,18 @@ class AidaHypothesisCollection:
     def to_s(self):
         return [ hyp.to_s() for hyp in self.hypotheses ]
         
+    @staticmethod
+    def from_json(json_obj, graph_obj):
+        def hypothesis_from_json(j, wt):
+            h = AidaHypothesis(graph_obj, stmts = j["statements"], core_stmts = j["queryStatements"],
+                                    stmt_weights = dict((j["statements"][i], j["statementWeights"][i]) for i in range(len(j["statements"]))),
+                                   lweight = wt)
+        
+            h.add_failed_queries(j["failedQueries"])
+            return h
+            
+        return AidaHypothesisCollection([hypothesis_from_json(json_obj["support"][i], json_obj["probs"][i]) for i in range(len(json_obj["support"]))])
+
+        
+        
+
