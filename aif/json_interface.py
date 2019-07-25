@@ -558,7 +558,7 @@ class JsonInterface:
         ## if len(textjustifications) > 0:
         ##     self.json_just_obj[node.name] = textjustifications                
 
-    def simplify_subsubtypes(self):
+    def simplify_subsubtypes(self, type_mapping=None, role_mapping=None):
         for stmt_name, stmt_node in self.json_obj['theGraph'].items():
             if stmt_node['type'] == 'Statement':
                 pred_name = stmt_node.get('predicate', None)
@@ -567,21 +567,36 @@ class JsonInterface:
                     type_str = stmt_node.get('object', None)
                     if type_str is not None:
                         type_namespace, type_name = split_uri(type_str)
-                        if len(type_name.split('.')) > 2:
+
+                        new_type_name = None
+
+                        if type_mapping is not None and type_name in type_mapping:
+                            new_type_name = type_mapping[type_name]
+
+                        elif len(type_name.split('.')) > 2:
                             assert len(type_name.split('.')) == 3
                             new_type_name, subsubtype = type_name.rsplit('.', maxsplit=1)
                             assert '_' not in subsubtype
 
+                        if new_type_name is not None and new_type_name != type_name:
                             new_type_str = type_namespace + new_type_name
                             stmt_node['object'] = new_type_str
+                            stmt_node['object_original'] = type_str
 
                 elif pred_name is not None:
-                    if len(pred_name.split('.')) > 2:
+                    new_pred_name = None
+
+                    if role_mapping is not None and pred_name in role_mapping:
+                        new_pred_name = role_mapping[pred_name]
+
+                    elif len(pred_name.split('.')) > 2:
                         assert len(pred_name.split('.')) == 3
-                        new_pred_name, subsubtype_w_role = \
-                            pred_name.rsplit('.', maxsplit=1)
+
+                        new_pred_name, subsubtype_w_role = pred_name.rsplit('.', maxsplit=1)
                         assert len(subsubtype_w_role.split('_')) == 2
                         role_name = subsubtype_w_role.split('_')[1]
                         new_pred_name = '{}_{}'.format(new_pred_name, role_name)
 
+                    if new_pred_name is not None and new_pred_name != pred_name:
                         stmt_node['predicate'] = new_pred_name
+                        stmt_node['predicate_original'] = pred_name
