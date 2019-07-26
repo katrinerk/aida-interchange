@@ -1,0 +1,168 @@
+{
+  "types": {
+    "ArtifactExistence.DamageDestroy": "ArtifactExistence.DamageDestroy",
+    "Conflict.Attack": "Conflict.Attack",
+    "Conflict.Demonstrate": "Conflict.Demonstrate",
+
+    "Contact.Collaborate": "Contact.Contact",
+    "Contact.Collaborate.Correspondence": "Contact.Correspondence",
+    "Contact.Collaborate.Meet": "Contact.Meet",
+
+    "Contact.CommandOrder": "Contact.Contact",
+    "Contact.CommandOrder.Broadcast": "Contact.Broadcast",
+    "Contact.CommandOrder.Correspondence": "Contact.Correspondence",
+    "Contact.CommandOrder.Meet": "Contact.Meet",
+
+    "Contact.CommitmentPromiseExpressIntent": "Contact.Contact",
+    "Contact.CommitmentPromiseExpressIntent.Broadcast": "Contact.Broadcast",
+    "Contact.CommitmentPromiseExpressIntent.Correspondence": "Contact.Correspondence",
+    "Contact.CommitmentPromiseExpressIntent.Meet": "Contact.Meet",
+
+    "Contact.Discussion": "Contact.Contact",
+    "Contact.Discussion.Correspondence": "Contact.Correspondence",
+    "Contact.Discussion.Meet": "Contact.Meet",
+
+    "Contact.FuneralVigil": "Contact.Contact",
+    "Contact.FuneralVigil.Meet": "Contact.Meet",
+
+    "Contact.MediaStatement": "Contact.Contact",
+    "Contact.MediaStatement.Broadcast": "Contact.Broadcast",
+
+    "Contact.Negotiate": "Contact.Contact",
+    "Contact.Negotiate.Correspondence": "Contact.Correspondence",
+    "Contact.Negotiate.Meet": "Contact.Meet",
+
+    "Contact.Prevarication": "Contact.Contact",
+    "Contact.Prevarication.Broadcast": "Contact.Broadcast",
+    "Contact.Prevarication.Correspondence": "Contact.Correspondence",
+    "Contact.Prevarication.Meet": "Contact.Meet",
+
+    "Contact.PublicStatementInPerson": "Contact.Contact",
+    "Contact.PublicStatementInPerson.Broadcast": "Contact.Broadcast",
+
+    "Contact.RequestAdvise": "Contact.Contact",
+    "Contact.RequestAdvise.Broadcast": "Contact.Broadcast",
+    "Contact.RequestAdvise.Correspondence": "Contact.Correspondence",
+    "Contact.RequestAdvise.Meet": "Contact.Meet",
+
+    "Contact.ThreatenCoerce": "Contact.Contact",
+    "Contact.ThreatenCoerce.Broadcast": "Contact.Broadcast",
+    "Contact.ThreatenCoerce.Correspondence": "Contact.Correspondence",
+    "Contact.ThreatenCoerce.Meet": "Contact.Meet",
+
+    "Government.Agreements": "Government.Agreements",
+    "Government.Legislate": "Government.Legislate",
+    "Government.Spy": "Government.Spy",
+    "Government.Vote": "Government.Vote",
+
+    "Inspection.SensoryObserve": "Inspection.Artifact",
+    "Inspection.SensoryObserve.InspectPeopleOrganization": "Inspection.People",
+
+    "Justice.ArrestJailDetain.ArrestJailDetain": "Justice.ArrestJail",
+    "Justice.InitiateJudicialProcess.ChargeIndict": "Justice.ChargeIndict",
+    "Justice.InitiateJudicialProcess.TrialHearing": "Justice.TrialHearing",
+    "Justice.Investigate": "Justice.Investigate",
+    "Justice.JudicialConsequences.Convict": "Justice.Convict",
+    "Justice.JudicialConsequences.Execute": "Justice.Execute",
+    "Justice.JudicialConsequences.Extradite": "Justice.Extradite",
+
+    "Life.Die": "Life.Die",
+    "Life.Injure": "Life.Injure",
+
+    "Manufacture.Artifact": "Manufacture.Artifact",
+
+    "Movement.TransportArtifact": "Movement.TransportArtifact",
+    "Movement.TransportPerson": "Movement.TransportPerson",
+
+    "Personnel.Elect": "Personnel.Elect",
+    "Personnel.EndPosition": "Personnel.EndPosition",
+    "Personnel.StartPosition": "Personnel.StartPosition",
+
+    "Transaction.Transaction": "Transaction.Transaction",
+    "Transaction.TransferMoney": "Transaction.TransferMoney",
+    "Transaction.TransferOwnership": "Transaction.TransferOwnership"
+  },
+  "roles": {
+    "ArtifactExistence.DamageDestroy": {"DamagerDestroyer": "Agent", "Damager": "Agent", "Destroyer": "Agent", "Artifact": "Victim", "Instrument": "Instrument", "Place": "Place"},
+    "Conflict.Attack": {"Attacker": "Attacker", "Target": "Target", "Instrument": "Instrument", "Place": "Conflict.Place"},
+    "Conflict.Demonstrate": {"Demonstrator": "Demonstrator", "Place": "Place"},
+
+    "Contact.Collaborate": {"Participant": "Participant", "Place": "Place"},
+    "Contact.Collaborate.Correspondence": {"Participant": "Participant", "Place": "Place"},
+    "Contact.Collaborate.Meet": {"Participant": "Participant", "Place": "Place"},
+
+    "Contact.CommandOrder": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.CommandOrder.Broadcast": {"Communicator": "Broadcaster", "Recipient": "Audience", "Place": "Place"},
+    "Contact.CommandOrder.Correspondence": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.CommandOrder.Meet": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+
+    "Contact.CommitmentPromiseExpressIntent": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.CommitmentPromiseExpressIntent.Broadcast": {"Communicator": "Broadcaster", "Recipient": "Audience", "Place": "Place"},
+    "Contact.CommitmentPromiseExpressIntent.Correspondence": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.CommitmentPromiseExpressIntent.Meet": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+
+    "Contact.Discussion": {"Participant": "Participant", "Place": "Place"},
+    "Contact.Discussion.Correspondence": {"Participant": "Participant", "Place": "Place"},
+    "Contact.Discussion.Meet": {"Participant": "Participant", "Place": "Place"},
+
+    "Contact.FuneralVigil": {"Participant": "Participant", "Place": "Place"},
+    "Contact.FuneralVigil.Meet": {"Participant": "Participant", "Place": "Place"},
+
+    "Contact.MediaStatement": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.MediaStatement.Broadcast": {"Communicator": "Broadcaster", "Recipient": "Audience", "Place": "Place"},
+
+    "Contact.Negotiate": {"Participant": "Participant", "Place": "Place"},
+    "Contact.Negotiate.Correspondence": {"Participant": "Participant", "Place": "Place"},
+    "Contact.Negotiate.Meet": {"Participant": "Participant", "Place": "Place"},
+
+    "Contact.Prevarication": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.Prevarication.Broadcast": {"Communicator": "Broadcaster", "Recipient": "Audience", "Place": "Place"},
+    "Contact.Prevarication.Correspondence": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.Prevarication.Meet": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+
+    "Contact.PublicStatementInPerson": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.PublicStatementInPerson.Broadcast": {"Communicator": "Broadcaster", "Recipient": "Audience", "Place": "Place"},
+
+    "Contact.RequestAdvise": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.RequestAdvise.Broadcast": {"Communicator": "Broadcaster", "Recipient": "Audience", "Place": "Place"},
+    "Contact.RequestAdvise.Correspondence": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.RequestAdvise.Meet": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+
+    "Contact.ThreatenCoerce": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.ThreatenCoerce.Broadcast": {"Communicator": "Broadcaster", "Recipient": "Audience", "Place": "Place"},
+    "Contact.ThreatenCoerce.Correspondence": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+    "Contact.ThreatenCoerce.Meet": {"Communicator": "Participant", "Recipient": "Participant", "Place": "Place"},
+
+    "Government.Agreements": {"Participant": "Signer", "RejecterNullifier": "Signer", "Violator": "Signer", "OtherParticipant": "Signer", "Place": "Place"},
+    "Government.Legislate": {"GovernmentBody": "Legislature", "Law": "Law", "Place": "Place"},
+    "Government.Spy": {"Spy": "Agent", "ObservedEntity": "Target", "Beneficiary": "Beneficiary", "Place": "Place"},
+    "Government.Vote": {"Voter": "Voter", "Candidate": "Candidate", "Ballot": "Ballot", "Result": "Results", "Place": "Place"},
+
+    "Inspection.SensoryObserve": {"Observer": "Inspector", "Monitor": "Inspector", "Inspector": "Inspector", "ObservedEntity": "Thing", "MonitoredEntity": "Thing", "InspectedEntity": "Thing", "Place": "Place"},
+    "Inspection.SensoryObserve.InspectPeopleOrganization": {"Inspector": "Inspector", "InspectedEntity": "Person", "Place": "Place"},
+
+    "Justice.ArrestJailDetain.ArrestJailDetain": {"Jailer": "Agent", "Detainee": "Person", "Crime": "Crime", "Place": "Place"},
+    "Justice.InitiateJudicialProcess.ChargeIndict": {"Prosecutor": "Prosecutor", "Defendant": "Justice.Defendant", "JudgeCourt": "Adjudicator", "Crime": "Crime", "Place": "Place"},
+    "Justice.InitiateJudicialProcess.TrialHearing": {"Prosecutor": "Prosecutor", "Defendant": "Justice.Defendant", "JudgeCourt": "Adjudicator", "Crime": "Crime", "Place": "Place"},
+    "Justice.Investigate": {"Investigator": "Investigator", "Defendant": "Investigatee", "Crime": "Crime", "Place": "Place"},
+    "Justice.JudicialConsequences.Convict": {"JudgeCourt": "Adjudicator", "Defendant": "Defendant", "Crime": "Crime", "Place": "Place"},
+    "Justice.JudicialConsequences.Execute": {"Executioner": "Agent", "Defendant": "Person", "Crime": "Crime", "Place": "Place"},
+    "Justice.JudicialConsequences.Extradite": {"Extraditer": "Agent", "Defendant": "Person", "Crime": "Crime", "Origin": "Origin", "Destination": "Destination"},
+
+    "Life.Die": {"Victim": "Victim", "Killer": "Agent", "Instrument": "Instrument", "Place": "Place"},
+    "Life.Injure": {"Victim": "Victim", "Injurer": "Agent", "Instrument": "Instrument", "Place": "Place"},
+
+    "Manufacture.Artifact": {"Manufacturer": "Manufacturer", "Artifact": "Artifact", "Instrument": "Instrument", "Place": "Place"},
+
+    "Movement.TransportArtifact": {"Transporter": "Agent", "Artifact": "Artifact", "Vehicle": "Instrument", "Origin": "Origin", "Destination": "Destination", "HidingPlace": "Destination"},
+    "Movement.TransportPerson": {"Transporter": "Agent", "Passenger": "Person", "Vehicle": "Instrument", "Origin": "Origin", "Destination": "Destination", "HidingPlace": "Destination"},
+
+    "Personnel.Elect": {"Voter": "Elector", "Candidate": "Elect", "Place": "Place"},
+    "Personnel.EndPosition": {"Employee": "Person", "PlaceOfEmployment": "Organization", "Place": "Place"},
+    "Personnel.StartPosition": {"Employee": "Person", "PlaceOfEmployment": "Organization", "Place": "Place"},
+
+    "Transaction.Transaction": {"Giver": "Giver", "Recipient": "Recipient", "Beneficiary": "Beneficiary", "Place": "Place"},
+    "Transaction.TransferMoney": {"Giver": "Giver", "Recipient": "Recipient", "Beneficiary": "Beneficiary", "Place": "Place", "Money": "Money"},
+    "Transaction.TransferOwnership": {"Giver": "Giver", "Recipient": "Recipient", "Beneficiary": "Beneficiary", "Place": "Place", "Artifact": "Thing"}
+  }
+}

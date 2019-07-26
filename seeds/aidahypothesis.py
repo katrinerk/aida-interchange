@@ -17,7 +17,7 @@ class AidaHypothesis:
         if stmts is None:
             self.stmts = set()
         else:
-            self.stmts = stmts
+            self.stmts = set(stmts)
 
         if stmt_weights is None:
             self.stmt_weights = { }
@@ -27,7 +27,7 @@ class AidaHypothesis:
         if core_stmts is None:
             self.core_stmts = set()
         else:
-            self.core_stmts = core_stmts
+            self.core_stmts = set(core_stmts)
 
         # failed queries are added from outside, as they are needed in the json object
         self.failed_queries = [ ]
@@ -58,12 +58,12 @@ class AidaHypothesis:
         elif core:
             self.stmt_weights[stmtlabel ] = 0.0
 
-    def extend(self, stmtlabel, core = False):
+    def extend(self, stmtlabel, core = False, weight = None):
         if stmtlabel in self.stmts:
             return self
         
         new_hypothesis = self.copy()
-        new_hypothesis.add_stmt(stmtlabel, core = core)
+        new_hypothesis.add_stmt(stmtlabel, core = core, weight = weight)
         return new_hypothesis
 
     def copy(self):
@@ -109,6 +109,7 @@ class AidaHypothesis:
                         self.stmt_weights[ typestmt ] = ere_weight
                     else:
                         # no reason not to give a low default weight to this edge
+                        # print("HIER4 default wt", ere, typelabel, self.default_weight)
                         self.stmt_weights[stmt] = self.default_weight
                         
         
@@ -242,8 +243,8 @@ class AidaHypothesis:
 
 
     # iterate over arguments of an event or relation in this hypothesis
-    # yield pairs of (argument label, ERE ID)
-    def eventrelation_each_argument(self, eventrel_id):
+    # yield tuples of (statement, argument label, ERE ID)
+    def eventrelation_each_argstmt(self, eventrel_id):
         if not (self.graph_obj.is_event(eventrel_id) or self.graph_obj.is_relation(eventrel_id)):
             return
 
@@ -251,12 +252,38 @@ class AidaHypothesis:
             if stmtlabel in self.stmts:
                 stmt = self.graph_obj.thegraph[stmtlabel]
                 if stmt["subject"] == eventrel_id and self.graph_obj.is_ere(stmt["object"]):
-                    yield (stmt["predicate"], stmt["object"])
+                    yield (stmt, stmt["predicate"], stmt["object"])
 
+    # iterate over arguments of an event or relation in this hypothesis
+    # yield pairs of (argument label, ERE ID)
+    def eventrelation_each_argument(self, eventrel_id):
+        for stmtlabel, predicate, object in self.eventrelation_each_argstmt(eventrel_id):
+            yield (predicate, object)
+
+    # return each argument of the event or relation eventrel_id that has rolelabel as its label
+    # exact match!!
     def eventrelation_each_argument_labeled(self, eventrel_id, rolelabel):
         for thisrolelabel, filler in self.eventrelation_each_argument(eventrel_id):
             if thisrolelabel == rolelabel:
                 yield filler
+
+    # return each argument of the event or relation eventrel_id that has rolelabel as its label
+    # exact match!!
+    def eventrelation_each_argument_labeled_like(self, eventrel_id, classlabel, rolelabel):
+        for thisrolelabel, filler in self.eventrelation_each_argument(eventrel_id):
+            if self.graph_obj.rolelabel_isa(thisrolelabel, classlabel, rolelabel):
+                yield filler
+                
+    def eventrelation_each_argstmt_labeled(self, eventrel_id, rolelabel):
+        for stmt, thisrolelabel, filler in self.eventrelation_each_argstmt(eventrel_id):
+            if thisrolelabel == rolelabel:
+                yield (stmt, filler)
+                
+    def eventrelation_each_argstmt_labeled_like(self, eventrel_id, classlabel, rolelabel):
+        for stmt, thisrolelabel, filler in self.eventrelation_each_argstmt(eventrel_id):
+            if self.graph_obj.rolelabel_isa(thisrolelabel, classlabel, rolelabel):
+                yield (stmt, filler)
+        
             
 
     # types of an ERE node in this hypothesis
@@ -292,32 +319,21 @@ class AidaHypothesis:
     # possible affiliations of an ERE:
     # yield ERE that is the affiliation
     def ere_each_possible_affiliation(self, ere_id):
-        # go through possible affiliation statements where this ERE is the object
-        for stmtlabel in self.graph_obj.each_ere_adjacent_stmt(ere_id, "GeneralAffiliation.APORA_Affiliate", "object"):
-            rel_id = self.graph_obj.thegraph[stmtlabel]["subject"]
-            for otherstmtlabel in self.graph_obj.each_ere_adjacent_stmt(rel_id, "GeneralAffiliation.APORA_Affiliation", "subject"):
-                affiliation_id = self.graph_obj.thegraph[otherstmtlabel]["object"]
-                yield affiliation_id
+        for affiliation_id in self.graph_obj.possible_affiliations(ere_id):
+            yield affiliation_id
 
     # actual affiliations of an ERE in this hypothesis
     def ere_each_affiliation(self, ere_id):
-        # go through possible affiliation statements where this ERE is the object
-        for stmtlabel in self.graph_obj.each_ere_adjacent_stmt(ere_id, "GeneralAffiliation.APORA_Affiliate", "object"):
-            if stmtlabel not in self.stmts:
-                continue
-            
-            rel_id = self.graph_obj.thegraph[stmtlabel]["subject"]
-            for otherstmtlabel in self.graph_obj.each_ere_adjacent_stmt(rel_id, "GeneralAffiliation.APORA_Affiliation", "subject"):
-                if otherstmtlabel not in self.stmts:
-                    continue
-                
-                affiliation_id = self.graph_obj.thegraph[otherstmtlabel]["object"]
+        for stmt1, affiliation_ere, stmt2 in self.graph_obj.possible_affiliation_triples(ere_id):
+            if stmt1 in self.stmts and stmt2 in self.stmts:
+                affiliation_id = self.graph_obj.stmt_object(stmt2)
                 yield affiliation_id
 
     # is this ERE listed as an affiliation, though not necessarily in this hypothesis?
     def ere_possibly_isaffiliation(self, ere_id):
-        if len(list(self.graph_obj.each_ere_adjacent_stmt(ere_id, "GeneralAffiliation.APORA_Affiliation", "object"))) > 0:
-            return True
+        for stmt in self.graph_obj.each_ere_adjacent_stmt_anyrel(ere_id):
+            if self.graph_obj.stmt_object(stmt) == ere_id and self.graph_obj.is_affiliation_rolelabel(self.graph_obj.stmt_predicate(stmt)):
+                return True
         
 ############3
 # collection of hypotheses, after initial cluster seed generation has been done
@@ -325,6 +341,9 @@ class AidaHypothesisCollection:
     def __init__(self, hypotheses):
         self.hypotheses = hypotheses
 
+    def add(self, hypothesis):
+        self.hypotheses.append(hypothesis)
+        
     # compile json object that lists all the hypotheses with their statements
     def to_json(self):
        
@@ -342,3 +361,19 @@ class AidaHypothesisCollection:
     def to_s(self):
         return [ hyp.to_s() for hyp in self.hypotheses ]
         
+    @staticmethod
+    # generate an AidaHypothesisCollection from a json file
+    def from_json(json_obj, graph_obj):
+        def hypothesis_from_json(j, wt):
+            h = AidaHypothesis(graph_obj, stmts = j["statements"], core_stmts = j["queryStatements"],
+                                    stmt_weights = dict((j["statements"][i], j["statementWeights"][i]) for i in range(len(j["statements"]))),
+                                   lweight = wt)
+        
+            h.add_failed_queries(j["failedQueries"])
+            return h
+            
+        return AidaHypothesisCollection([hypothesis_from_json(json_obj["support"][i], json_obj["probs"][i]) for i in range(len(json_obj["support"]))])
+
+        
+        
+
