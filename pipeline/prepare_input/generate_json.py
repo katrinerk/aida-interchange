@@ -63,19 +63,19 @@ logging.info('Building json representation of the AIF graph...')
 json_obj = JsonInterface(mygraph, simplification_level=0)
 logging.info('Done.')
 
-with open('event_simplification_mapping.json', 'r') as fin:
-    event_simplification_mapping = json.load(fin)
-with open('relation_simplification_mapping.json', 'r') as fin:
-    relation_simplification_mapping = json.load(fin)
-
-type_mapping = event_simplification_mapping['types']
-type_mapping.update(relation_simplification_mapping['types'])
-
-role_mapping = event_simplification_mapping['roles']
-role_mapping.update(relation_simplification_mapping['roles'])
-
-logging.info('Simplify subsubtypes...')
-json_obj.simplify_subsubtypes(type_mapping=type_mapping, role_mapping=role_mapping)
+# with open('event_simplification_mapping.json', 'r') as fin:
+#     event_simplification_mapping = json.load(fin)
+# with open('relation_simplification_mapping.json', 'r') as fin:
+#     relation_simplification_mapping = json.load(fin)
+#
+# type_mapping = event_simplification_mapping['types']
+# type_mapping.update(relation_simplification_mapping['types'])
+#
+# role_mapping = event_simplification_mapping['roles']
+# role_mapping.update(relation_simplification_mapping['roles'])
+#
+# logging.info('Simplify subsubtypes...')
+# json_obj.simplify_subsubtypes(type_mapping=type_mapping, role_mapping=role_mapping)
 
 logging.info('Writing output to {}...'.format(output_filename))
 logging.info('and justifications to {}...'.format(output_just_filename))
