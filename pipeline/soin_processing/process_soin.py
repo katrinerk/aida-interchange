@@ -53,7 +53,7 @@ def get_cluster_mappings(graph):
 
     for node in graph.nodes():
         if node.is_sameas_cluster():
-            cluster_to_prototype[node.name] = next(iter(node.get('prototype', shorten=True)))
+            cluster_to_prototype[node.name] = next(iter(node.get('prototype')))
         elif node.is_cluster_membership():
             cluster_member = next(iter(node.get('clusterMember')))
             cluster = next(iter(node.get('cluster')))
@@ -289,7 +289,7 @@ def main():
     print("\tDone.\n")
 
     write_me = {
-        'graph': soin.in_path,
+        'graph': '',
         'queries': [],
         'facets': [],
     }
