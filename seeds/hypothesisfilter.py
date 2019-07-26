@@ -87,11 +87,8 @@ class AidaHypothesisFilter:
         # check whether this ere has another type
         types = [type_ere for type_ere in hypothesis.ere_each_type(ere)]
         if len(types) > 1:
-            print("HIER1 flagging type stmt", test_stmt, types)
+            # print("HIER1 flagging type stmt", test_stmt, types)
             return False
-        ## if len([stmt for stmt in self.graph_obj.each_ere_adjacent_stmt(ere, "type", "subject")]) > 1:
-        ##     print("HIER1 flagging type stmt", test_stmt)
-        ##     return False
 
         return True
         
@@ -113,9 +110,6 @@ class AidaHypothesisFilter:
 
         for test_okay in tests:
             if not test_okay(hypothesis, stmt):
-                ## print("HIER hypothesis rejected esp", stmt)
-                ## print(hypothesis.to_s())
-                ## input("Press enter")
                 return False
                 
         return True
@@ -126,7 +120,6 @@ class AidaHypothesisFilter:
     # do this by starting a new hypothesis and re-inserting statements there by statement weight,
     # using the validate function
     def filtered(self, hypothesis):
-        print("HIER0", len(hypothesis.stmts), hypothesis.stmts)
         
         # new hypothesis: "incremental" because we add in things one at a time.
         # start with the core statements
@@ -137,8 +130,6 @@ class AidaHypothesisFilter:
         incr_hypothesis.add_failed_queries(hypothesis.failed_queries)
         incr_hypothesis.add_qvar_filler(hypothesis.qvar_filler)
         incr_hypothesis_eres = set(incr_hypothesis.eres())
-
-        print("HIER0.5 incr hyp", len(incr_hypothesis.stmts), incr_hypothesis.stmts)
 
         # all other statements are candidates, sorted by their weights in the hypothesis, highest first
         candidates = [ stmt for stmt in hypothesis.stmts if stmt not in hypothesis.core_stmts]
@@ -182,7 +173,6 @@ class AidaHypothesisFilter:
         # has become connected to the core by the last candidate to be added
         check_candidates_set_aside()
 
-        print("HIER2 remaining", len(incr_hypothesis.stmts), incr_hypothesis.stmts)
         return incr_hypothesis
         
 

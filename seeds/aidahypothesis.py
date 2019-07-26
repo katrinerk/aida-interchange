@@ -341,6 +341,9 @@ class AidaHypothesisCollection:
     def __init__(self, hypotheses):
         self.hypotheses = hypotheses
 
+    def add(self, hypothesis):
+        self.hypotheses.append(hypothesis)
+        
     # compile json object that lists all the hypotheses with their statements
     def to_json(self):
        
@@ -359,6 +362,7 @@ class AidaHypothesisCollection:
         return [ hyp.to_s() for hyp in self.hypotheses ]
         
     @staticmethod
+    # generate an AidaHypothesisCollection from a json file
     def from_json(json_obj, graph_obj):
         def hypothesis_from_json(j, wt):
             h = AidaHypothesis(graph_obj, stmts = j["statements"], core_stmts = j["queryStatements"],
