@@ -160,21 +160,22 @@ query_events = sorted(event_reweight.keys(), key = lambda e: event_reweight[e], 
 # write queries for entities
 for query_entity in query_entities:
     query_json = { }
-    query_json["graph"] = graph_filename
+    query_json["graph"] = os.path.basename(graph_filename)
+    query_json["queries"] = [ ]
 
-    facet_json = { "ere" : [ query_entity ], "statements" : [ ], "query_constraints" : [ ] }
+    facet_json = { "ere" : [ query_entity ], "statements" : [ ], "queryConstraints" : [ ] }
 
     # add query constraints
     for eventindex, rolelabel in enumerate(entity_evrole[ query_entity ]):
         if len(entity_evrole[ query_entity ][rolelabel]) > 1:
             # entity is adjacent to event #index via rolelabel
-            facet_json["query_constraints"].append( [ "?Event" + str(eventindex), rolelabel, query_entity])
+            facet_json["queryConstraints"].append( [ "?Event" + str(eventindex), rolelabel, query_entity])
             # other roles for that event
             event = random.choice(list(entity_evrole[ query_entity][rolelabel]))
             roles_done = set([rolelabel])
             for roleindex, stmt in enumerate(graph_obj.each_ere_adjacent_stmt_anyrel(event)):
                 if graph_obj.is_eventrole_stmt(stmt) and graph_obj.stmt_predicate(stmt) not in roles_done:
-                    facet_json["query_constraints"].append( [ "?Event" + str(eventindex), graph_obj.stmt_predicate(stmt), "?Role" + str(eventindex) + "_" + str(roleindex) ])
+                    facet_json["queryConstraints"].append( [ "?Event" + str(eventindex), graph_obj.stmt_predicate(stmt), "?Role" + str(eventindex) + "_" + str(roleindex) ])
                     roles_done.add(graph_obj.stmt_predicate(stmt))
                                       
     
@@ -187,9 +188,10 @@ for query_entity in query_entities:
 # write queries for events
 for query_event in query_events:
     query_json = { }
-    query_json["graph"] = graph_filename
+    query_json["graph"] = os.path.basename(graph_filename)
+    query_json["queries"] = [ ]
 
-    facet_json = { "statements" : [ ], "query_constraints" : [ ] }
+    facet_json = { "statements" : [ ], "queryConstraints" : [ ] }
 
     # select a query entity that is an argument of this event, but not one with multiple choices
     query_rolelabel = random.choice(list(r for r in event_rolefillers[query_event] if len(event_rolefillers[query_event][r]) == 1))
@@ -199,13 +201,13 @@ for query_event in query_events:
     
     # add query constraints:
     # connection from entry point to event
-    facet_json["query_constraints"].append( [ "?Event", query_rolelabel, query_entity])
+    facet_json["queryConstraints"].append( [ "?Event", query_rolelabel, query_entity])
     # ask about all other roles of this event
     for roleindex, rolelabel in enumerate(event_rolefillers[query_event].keys()):
         if rolelabel == query_rolelabel:
             continue
         
-        facet_json["query_constraints"].append( [ "?Event", rolelabel, "?Role" + str(roleindex) ])
+        facet_json["queryConstraints"].append( [ "?Event", rolelabel, "?Role" + str(roleindex) ])
                                       
     
     query_json["facets"] = [ facet_json ]
