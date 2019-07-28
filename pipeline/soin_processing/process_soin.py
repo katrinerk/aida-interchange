@@ -238,22 +238,29 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
                 set_of_nodes.add(node)
 
     ordered_list = sorted(list(set_of_nodes), key=lambda x: x[0], reverse=True)
-    returnme = []
+    ep_list = []
+    ep_weight_list = []
     for elem in ordered_list:
-        returnme.append(elem[1])
-    return returnme
+        ep_list.append(elem[1])
+        ep_weight_list.append(elem[0])
+    return ep_list, ep_weight_list
 
 
 def resolve_all_entrypoints(graph, entrypoints, cluster_to_prototype, entity_to_cluster, ep_cap):
-    results = {}
+    ep_dict = {}
+    ep_weight_dict = {}
     for entrypoint in entrypoints:
-        results[entrypoint.variable[0]] = find_entrypoint(graph,
-                                                          entrypoint,
-                                                          cluster_to_prototype,
-                                                          entity_to_cluster,
-                                                          ep_cap)
+        # results[entrypoint.variable[0]]
+        ep_list, ep_weight_list = find_entrypoint(graph,
+                                                  entrypoint,
+                                                  cluster_to_prototype,
+                                                  entity_to_cluster,
+                                                  ep_cap)
+        ep_dict[entrypoint.variable[0]] = ep_list
+        ep_weight_dict[entrypoint.variable[0]] = ep_weight_list
 
-    return results
+
+    return ep_dict, ep_weight_dict
 
 
 def main():
@@ -284,12 +291,13 @@ def main():
     print("\tDone.\n")
 
     print("Resolving all entrypoints...")
-    ep_dict = resolve_all_entrypoints(graph, soin.entrypoints, cluster_to_prototype, entity_to_cluster, args.ep_cap)
+    ep_dict, ep_weights_dict = resolve_all_entrypoints(graph, soin.entrypoints, cluster_to_prototype, entity_to_cluster, args.ep_cap)
     print("\tDone.\n")
 
     write_me = {
         'graph': '',
         'entrypoints': ep_dict,
+        'entrypointWeights': ep_weights_dict,
         'queries': [],
         'facets': [],
     }

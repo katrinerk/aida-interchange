@@ -96,9 +96,7 @@ class Frame:
             query_constraints.append(edge.edge_to_dict())
 
         rep = {
-            'ere': [],
             'temporal': temporal_dict,
-            'statements': [],
             'queryConstraints': query_constraints,
         }
 
