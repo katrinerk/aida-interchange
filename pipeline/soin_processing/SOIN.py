@@ -90,17 +90,13 @@ class Frame:
 
         return str(rep)
 
-    def frame_to_dict(self, variables_resolved, temporal_dict):
-        ere_list = []
-        for ere in variables_resolved.values():
-            ere_list.append(ere)
-
+    def frame_to_dict(self, temporal_dict):
         query_constraints = []
         for edge in self.edge_list:
-            query_constraints.append(edge.edge_to_dict(variables_resolved))
+            query_constraints.append(edge.edge_to_dict())
 
         rep = {
-            'ere': ere_list,
+            'ere': [],
             'temporal': temporal_dict,
             'statements': [],
             'queryConstraints': query_constraints,
@@ -130,14 +126,9 @@ class Edge:
         }
         return str(rep)
 
-    def edge_to_dict(self, variables_resolved):
+    def edge_to_dict(self):
         subj = self.subject
         obj = self.obj
-
-        if subj in variables_resolved:
-            subj = variables_resolved[self.subject]
-        if obj in variables_resolved:
-            obj = variables_resolved[self.obj]
 
         rep = [
              subj,
