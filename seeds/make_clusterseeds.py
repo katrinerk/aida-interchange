@@ -63,6 +63,7 @@ def work(soin_filename, graph_filename = None, graph_dir = None, out_filename = 
     # and expand on them
     hypothesis_obj = ClusterExpansion(graph_obj, clusterseed_obj.finalize())
     hypothesis_obj.type_completion()
+    hypothesis_obj.affiliation_completion()
 
     # write hypotheses out in json format.
 

@@ -43,7 +43,7 @@ new_hypothesis_collection = AidaHypothesisCollection( [])
 
 for hypothesis in hypothesis_collection.hypotheses:
     new_hypothesis = filter_obj.filtered(hypothesis)
-    new_hypothesis_collection.add(hypothesis)
+    new_hypothesis_collection.add(new_hypothesis)
 
 with open(outfilename, "w") as fout:
     new_json_hypotheses = new_hypothesis_collection.to_json()

@@ -5,21 +5,20 @@ import datetime
 # with missing entries for days/months/years
 class AidaIncompleteDate:
     def __init__(self, year, month, day):
-        if year is not None and not isinstance(year, int):
-            if not(isinstance(year, str) and year.strip("X") == ""):
-                print("unexpected type for year", type(year))
-            year = None
-            
-        if month is not None and not isinstance(month, int):
-            if not(isinstance(month, str) and month.strip("X") == ""):
-                print("unexpected type for month", type(month))
-            month = None
-            
-        if day is not None and not isinstance(day, int):
-            if not(isinstance(day, str) and day.strip("X") == ""):
-                print("unexpected type for day", type(day))
-            day = None
-            
+        def checkme(date, datestr):
+            if date is not None and not isinstance(date, int):
+                if isinstance(date, str) and date.isdigit():
+                    date = int(date)
+                else:
+                    if not(isinstance(date, str) and (date.strip("X") == "")):
+                        print("unexpected type for", datestr,  type(year))
+                    date = None
+            return date
+
+        year = checkme(year, "year")
+        month = checkme(month, "month")
+        day = checkme(day, "day")
+        
         self.year = year
         self.month = month
         self.day = day
@@ -74,7 +73,7 @@ class AidaIncompleteDate:
     def is_before(self, date2, add_a_day = False):
         if add_a_day:
             date2 = date2.add_day()
-        print("HIERbefore", self.year, self.month, self.day, date2.year, date2.month, date2.day)
+        # print("HIERbefore", self.year, self.month, self.day, date2.year, date2.month, date2.day)
         
         if self.year is None or date2.year is None:
             # we don't know which year one of the dates given is:
@@ -149,7 +148,7 @@ class AidaIncompleteDate:
             if newself.is_eq(date2):
                 return True
 
-        print("HIEReq", self.year, self.month, self.day, date2.year, date2.month, date2.day)            
+        # print("HIEReq", self.year, self.month, self.day, date2.year, date2.month, date2.day)            
         
         # try exact match
         if self.year is not None and date2.year is not None and self.year != date2.year:

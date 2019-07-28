@@ -4,6 +4,7 @@
 # but constructs all possible cluster seeds that can be made using different statements
 # that all fill the same SOIN
 
+
 import sys
 from collections import deque
 import datetime
@@ -25,7 +26,7 @@ from seeds.datecheck import AidaIncompleteDate, temporal_constraint_match
 # just a data structure, doesn't do much.
 class OneClusterSeed:
     def __init__(self, graph_obj, core_constraints, temporal_constraints, hypothesis, lweight = 0.0,
-                     qvar_filler = None, unfilled = None, unfillable = None):
+                     qvar_filler = None, unfilled = None, unfillable = None, entrypoints = None):
         # the following data is not changed, and is kept just for info
         self.graph_obj = graph_obj
         self.core_constraints = core_constraints
@@ -58,6 +59,11 @@ class OneClusterSeed:
         # some weights
         self.FAILED_QUERY_WT = -0.5
         self.FAILED_TEMPORAL = -0.5
+
+        # optionally filter core constraints: if any of the given entry points
+        # is not an ERE in the graph, mark the constraint unfillable
+        if entrypoints is not None:
+            self._filter_core_constraints_for_missing_entrypoints(entrypoints)
 
     # finalize:
     # report failed queries ot the underlying AidaHypothesis object
@@ -131,6 +137,13 @@ class OneClusterSeed:
     # return true if there is at least one unfilled core constraint remaining
     def core_constraints_remaining(self):
         return len(self.unfilled) > 0
+
+    # return true if there are no unfillable constraints
+    def no_failed_core_constraints(self):
+        return len(self.unfillable) == 0
+
+    def has_statements(self):
+        return len(self.hypothesis.stmts) > 0
     
     # next fillable constraint from the core constraints list,
     # or None if none fillable
@@ -250,7 +263,7 @@ class OneClusterSeed:
                 if not temporal_constraint_match(self.graph_obj.thegraph[filler], self.temporal_constraints.get(nfc["variable"], None), leeway):
                     # yup, this filler runs afoul of some temporal constraint.
                     # do not use it
-                    print("temp mismatch")
+                    # print("temp mismatch")
                     has_temporal_constraint = True
                     continue
 
@@ -272,6 +285,19 @@ class OneClusterSeed:
             print("ClusterSeed error: unknown role", nfc["role"])
             return None
 
+    # optionally filter core constraints: if any of the given entry points
+    # is not an ERE in the graph, mark the constraint unfillable        
+    def _filter_core_constraints_for_missing_entrypoints(self, entrypoints):
+        missing_entrypoints = [ e for e in entrypoints if not self.graph_obj.is_node(e) ]
+        for ix, constraint in enumerate(self.core_constraints):
+            subj, pred, obj = constraint
+            if subj in missing_entrypoints or obj in missing_entrypoints:
+                self.unfilled.remove(ix)
+                self.unfillable.add(ix)
+                
+        if len(missing_entrypoints) > 0:
+            print("Warning: some entry points not found in the graph:", missing_entrypoints)
+    
     # is the given string a variable, or should it be viewed as a string constant?
     # use the list of all string constants in the given graph
     def _is_string_constant(self, strval):
@@ -314,28 +340,62 @@ class ClusterSeeds:
     # create initial cluster seeds.
     # this is called from __init__
     def _make_seeds(self):
+        # keep queue of hypotheses-in-making, list of finished hypotheses
         hypotheses_todo = deque()
         hypotheses_done = [ ]
+
+        # have we found any hypothesis without failed queries yet?
+        # if so, we can eliminate all hypotheses with failed queries
+        previously_found_hypothesis_without_failed_queries = False
 
         # initialize deque with one core hypothesis per facet
         for facet_index, facet in enumerate(self.soin_obj["facets"]):
 
             # start a new hypothesis
             core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), \
-                                          AidaHypothesis(self.graph_obj), lweight = 0.0)
+                                          AidaHypothesis(self.graph_obj), lweight = 0.0, entrypoints = facet["ere"])
             hypotheses_todo.append(core_hyp)
 
         # extend all hypotheses in the deque until they are done
         while len(hypotheses_todo) > 0:
             core_hyp = hypotheses_todo.popleft()
             if core_hyp.done:
-                # nothing more to be done for this hypothesis
-                hypotheses_done.append(core_hyp)
+                # hypothesis finished.
+                # any statements in this one?
+                if not core_hyp.has_statements():
+                    # if not, don't record it
+                    continue
+                
+                # is this one free of failed queries?
+                if core_hyp.no_failed_core_constraints():
+                    # yes, no failed queries!
+                    # is this the first one we find? then remove all previous "done" hypotheses,
+                    # as they had failed queries
+                    if not previously_found_hypothesis_without_failed_queries:
+                        # print("found a hypothesis without failed queries, discarding", len(hypotheses_done))
+                        hypotheses_done = [ ]
+                        previously_found_hypothesis_without_failed_queries = True
+
+                    hypotheses_done.append(core_hyp)
+                else:
+                    # this one has failed queries
+                    if not previously_found_hypothesis_without_failed_queries:
+                        # that said, we haven't found a better one yet, so let's keep this one.
+                        hypotheses_done.append(core_hyp)
+                    # else:
+                    #    print("skipping hypothesis with failed queries because there is at least one complete one")
+                
                 continue
 
             new_hypotheses = core_hyp.extend()
-            hypotheses_todo.extend(new_hypotheses)
+            # put extensions of this hypothesis to the beginning of the queue, such that
+            # we explore one hypothesis to the end before we start the next.
+            # this way we can see early if we have hypotheses without failed queries
+            hypotheses_todo.extendleft(new_hypotheses)
 
+        if not previously_found_hypothesis_without_failed_queries:
+            print("Warning: All hypotheses had at least one failed query.")
+        
         # at this point, all hypotheses are as big as they can be.
         return hypotheses_done
 
