@@ -25,7 +25,7 @@ import itertools
 
 from copy import deepcopy
 
-graph_path = '/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R103'
+graph_path = '/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R107'
 
 def load_graph(in_dir):
     """
@@ -190,7 +190,7 @@ def check_descriptor(graph, typing_statement, typed_descriptor):
     return False
 
 
-def find_entrypoint(graph, entrypoint):
+def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, ep_cap):
     """
     A function to resolve an entrypoint to the set of entity nodes that satisfy it.
     This function iterates through every node in the graph. If that node is a typing statement, it computes a
@@ -204,6 +204,7 @@ def find_entrypoint(graph, entrypoint):
     :return: {Nodes}
     """
     score_mapping = {}
+    results = {}
     for node in graph.nodes():
         if node.is_type_statement():
             typed_score = 0
@@ -213,46 +214,46 @@ def find_entrypoint(graph, entrypoint):
             for filler in entrypoint.typed_descriptor_list:
                 for typed_descriptor in filler:
                     typed_score += check_type(node, typed_descriptor)
-                    descriptor_result = check_descriptor(graph, node, typed_descriptor)
-
                     if check_descriptor(graph, node, typed_descriptor):
                         descriptor_score += 1
 
-            if typed_score in score_mapping:
-                if descriptor_score in score_mapping[typed_score]:
-                    score_mapping[typed_score][descriptor_score].add(node)
-                else:
-                    score_mapping[typed_score][descriptor_score] = {node}
+            # Compute the total score, pull the prototype, and add the prototype node to the results dict
+            total_score = typed_score + descriptor_score
+            subject_address = next(iter(node.get('subject')))
+            prototype = cluster_to_prototype[entity_to_cluster[subject_address]]
+            if total_score in results:
+                results[total_score].add((total_score, prototype))
             else:
-                score_mapping[typed_score] = {descriptor_score: {node}}
+                results[total_score] = {(total_score, prototype)}
 
-    typed_keys_sorted = sorted(score_mapping.keys(), reverse=True)
-    descriptor_keys_sorted = sorted(score_mapping[typed_keys_sorted[0]].keys(), reverse=True)
+    set_of_nodes = set()
+    return_count = 0
+    scores_sorted = sorted(results.keys(), reverse=True)
+    for score in scores_sorted:
+        for node in results[score]:
+            if return_count >= ep_cap:
+                break
+            elif node not in set_of_nodes:
+                return_count += 1
+                set_of_nodes.add(node)
 
-    return score_mapping[typed_keys_sorted[0]][descriptor_keys_sorted[0]]
+    ordered_list = sorted(list(set_of_nodes), key=lambda x: x[0], reverse=True)
+    returnme = []
+    for elem in ordered_list:
+        returnme.append(elem[1])
+    return returnme
 
 
-def resolve_all_entrypoints(graph, entrypoints, cluster_to_prototype, entity_to_cluster):
+def resolve_all_entrypoints(graph, entrypoints, cluster_to_prototype, entity_to_cluster, ep_cap):
     results = {}
     for entrypoint in entrypoints:
-        node_set = find_entrypoint(graph, entrypoint)
+        results[entrypoint.variable[0]] = find_entrypoint(graph,
+                                                          entrypoint,
+                                                          cluster_to_prototype,
+                                                          entity_to_cluster,
+                                                          ep_cap)
 
-        #  TODO: Why is this also wrapped in a tuple?
-        if entrypoint.variable[0] in results:
-
-            results[entrypoint.variable[0]].union(node_set)
-        else:
-            results[entrypoint.variable[0]] = node_set
-
-    coref_results = {}
-    for variable in results:
-        node_set = set()
-        for node in results[variable]:
-            subject = next(iter(node.get('subject')))
-            node_set.add(cluster_to_prototype[entity_to_cluster[subject]])
-        coref_results[variable] = node_set
-
-    return coref_results
+    return results
 
 
 def main():
@@ -262,6 +263,12 @@ def main():
     parser.add_argument("soin_in", action="store", help="The path to the input XML")
     parser.add_argument("graph_in", action="store", help="The path to the input TTLs")
     parser.add_argument("out_path", action="store", help="The output path.")
+    parser.add_argument('-ep',
+                        '--ep-cap',
+                        action='store',
+                        type=int,
+                        default=50,
+                        help='The maximum number of EPs *per entrypoint description*')
     args = parser.parse_args()
 
     print("Parsing SOIN XML...")
@@ -277,30 +284,21 @@ def main():
     print("\tDone.\n")
 
     print("Resolving all entrypoints...")
-    result = resolve_all_entrypoints(graph, soin.entrypoints, cluster_to_prototype, entity_to_cluster)
-    all_names = sorted(result)
-    all_combinations = itertools.product(*(result[Name] for Name in all_names))
-    all_combinations_dicts = []
-    for combo in all_combinations:
-        rep = {}
-        for i in range(len(all_names)):
-            rep[all_names[i]] = combo[i]
-        all_combinations_dicts.append(rep)
+    ep_dict = resolve_all_entrypoints(graph, soin.entrypoints, cluster_to_prototype, entity_to_cluster, args.ep_cap)
     print("\tDone.\n")
 
     write_me = {
         'graph': '',
+        'entrypoints': ep_dict,
         'queries': [],
         'facets': [],
     }
 
     print("Serializing data structures...")
+    temporal_info = soin.temporal_info_to_dict()
     for frame in soin.frames:
-        print(len(all_combinations_dicts))
-        for combo in all_combinations_dicts:
-            temporal_info = soin.temporal_info_to_dict()
-            frame_rep = frame.frame_to_dict(combo, soin.temporal_info_to_dict())
-            write_me['facets'].append(frame_rep)
+        frame_rep = frame.frame_to_dict(temporal_info)
+        write_me['facets'].append(frame_rep)
     print("\tDone.\n")
 
     print("Writing output...")
