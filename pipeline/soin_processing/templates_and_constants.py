@@ -1,3 +1,16 @@
+#  Toggles debug mode; debug mode prints large amounts of scoring information and pauses for review when a node
+#  scores above a threshold specified in DEBUG_SCORE_FLOOR
+DEBUG = False
+DEBUG_SCORE_FLOOR = 53  # The minimum score required to trigger a pause in debug mode
+
+#  The weights for each type of score
+SCORE_WEIGHTS = {
+    'name': 10,
+    'descriptor': 10,
+    'type': 1,
+}
+
+
 EP_REP_TEMPLATE = {
     "variable": None,
     "typed_descriptor_list": [],
