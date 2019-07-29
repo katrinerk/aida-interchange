@@ -1,6 +1,6 @@
 {
   "types": {
-    "ArtifactExistence.DamageDestroy": "ArtifactExistence.DamageDestroy",
+    "ArtifactExistence.DamageDestroy": "Existence.DamageDestroy",
     "Conflict.Attack": "Conflict.Attack",
     "Conflict.Demonstrate": "Conflict.Demonstrate",
 
