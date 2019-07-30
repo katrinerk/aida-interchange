@@ -31,7 +31,8 @@ def shortestname(label, graph_obj):
 
 ##
 # function that actually does the work
-def work(soin_filename, graph_filename = None, graph_dir = None, out_filename = None, maxnumseeds = None, log = False, discard_failedqueries = False):
+def work(soin_filename, graph_filename = None, graph_dir = None, out_filename = None, maxnumseeds = None, log = False,
+             discard_failedqueries = False, earlycutoff = False):
 
     with open(soin_filename, 'r') as fin:
         soin_obj = json.load(fin)
@@ -58,7 +59,7 @@ def work(soin_filename, graph_filename = None, graph_dir = None, out_filename = 
     ###########
     # create cluster seeds
 
-    clusterseed_obj = ClusterSeeds(graph_obj, soin_obj, discard_failedqueries = discard_failedqueries)
+    clusterseed_obj = ClusterSeeds(graph_obj, soin_obj, discard_failedqueries = discard_failedqueries, earlycutoff = earlycutoff)
 
     # and expand on them
     hypothesis_obj = ClusterExpansion(graph_obj, clusterseed_obj.finalize())
@@ -117,7 +118,9 @@ parser.add_option("-n", "--maxseeds", action = "store", dest = "maxnumseeds", ty
 # directories instead of files
 parser.add_option("-d", "--dirs", action = "store_true", dest = "isdir", default = False, help = "soin, graph, output are directories rather than files")
 # discard hypotheses with failed queries?
-parser.add_option("-f", "--discard_failed_queries", action = "store_true", dest = "discard_failedqueries", default = False, help = "discard hypotheses that have failed queries?")
+parser.add_option("-f", "--discard_failed_queries", action = "store_true", dest = "discard_failedqueries", default = False, help = "discard hypotheses that have failed queries")
+# early cutoff: discard queries below the best k based only on entry point scores
+parser.add_option("-c", "--early_cutoff", action = "store", dest = "earlycutoff", type = "int", default = None, help = "discard queries below the best n based only on entry point scores")
 
 
 (options, args) = parser.parse_args()
@@ -139,9 +142,9 @@ if options.isdir:
             print("SoIN", entry)
             out_filename = os.path.join(out_name, "seeds_" + entry)
             work(soin_filename, graph_dir = graph_name, out_filename= out_filename, maxnumseeds = options.maxnumseeds, log = True,
-                     discard_failedqueries = options.discard_failedqueries)
+                     discard_failedqueries = options.discard_failedqueries, earlycutoff = options.earlycutoff)
 else:
     # work on a single query
     print("SoIN", soin_name)
     work(soin_name, graph_filename = graph_name, out_filename = out_name, maxnumseeds = options.maxnumseeds, log = True,
-             discard_failedqueries = options.discard_failedqueries)
+             discard_failedqueries = options.discard_failedqueries, earlycutoff = options.earlycutoff)

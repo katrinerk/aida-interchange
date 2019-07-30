@@ -9,6 +9,9 @@ import sys
 from collections import deque
 import datetime
 import math
+import itertools
+import functools
+import operator
 
 
 from os.path import dirname, realpath
@@ -25,13 +28,14 @@ from seeds.datecheck import AidaIncompleteDate, temporal_constraint_match
 # class that holds a single cluster seed.
 # just a data structure, doesn't do much.
 class OneClusterSeed:
-    def __init__(self, graph_obj, core_constraints, temporal_constraints, hypothesis, lweight = 0.0,
-                     qvar_filler = None, unfilled = None, unfillable = None, entrypoints = None):
+    def __init__(self, graph_obj, core_constraints, temporal_constraints, hypothesis, qvar_filler, lweight = 0.0,
+                    unfilled = None, unfillable = None):
         # the following data is not changed, and is kept just for info
         self.graph_obj = graph_obj
         self.core_constraints = core_constraints
         # temporal constraints: mapping queryvariable -> {start_time: ..., end_time:...}
         self.temporal_constraints = temporal_constraints
+        
         # the following data is changed.
         # flags: am I done?
         self.done = False
@@ -46,8 +50,7 @@ class OneClusterSeed:
         self.filter = AidaHypothesisFilter(self.graph_obj)
 
         # mapping from query variable to filler: string to string, value strings are IDs in graph_obj
-        if qvar_filler is None: self.qvar_filler = { }
-        else: self.qvar_filler = qvar_filler
+        self.qvar_filler = qvar_filler
 
         # unfilled, unfillable are indices on self.core_constraints
         if unfilled is None: self.unfilled = set(range(len(core_constraints)))
@@ -60,10 +63,6 @@ class OneClusterSeed:
         self.FAILED_QUERY_WT = -0.5
         self.FAILED_TEMPORAL = -0.5
 
-        # optionally filter core constraints: if any of the given entry points
-        # is not an ERE in the graph, mark the constraint unfillable
-        if entrypoints is not None:
-            self._filter_core_constraints_for_missing_entrypoints(entrypoints)
 
     # finalize:
     # report failed queries ot the underlying AidaHypothesis object
@@ -120,8 +119,8 @@ class OneClusterSeed:
                 new_unfilled = self.unfilled.difference([nfc["index"]])
                 new_unfillable = self.unfillable.copy()
 
-                retv.append(OneClusterSeed(self.graph_obj, self.core_constraints, self.temporal_constraints, new_hypothesis, self.lweight, 
-                       new_qvar_filler, new_unfilled, new_unfillable))
+                retv.append(OneClusterSeed(self.graph_obj, self.core_constraints, self.temporal_constraints, new_hypothesis, new_qvar_filler,
+                                               lweight = self.lweight, unfilled = new_unfilled, unfillable = new_unfillable))
                 
 
         if len(retv) == 0:
@@ -285,19 +284,6 @@ class OneClusterSeed:
             print("ClusterSeed error: unknown role", nfc["role"])
             return None
 
-    # optionally filter core constraints: if any of the given entry points
-    # is not an ERE in the graph, mark the constraint unfillable        
-    def _filter_core_constraints_for_missing_entrypoints(self, entrypoints):
-        missing_entrypoints = [ e for e in entrypoints if not self.graph_obj.is_node(e) ]
-        for ix, constraint in enumerate(self.core_constraints):
-            subj, pred, obj = constraint
-            if subj in missing_entrypoints or obj in missing_entrypoints:
-                self.unfilled.remove(ix)
-                self.unfillable.add(ix)
-                
-        if len(missing_entrypoints) > 0:
-            print("Warning: some entry points not found in the graph:", missing_entrypoints)
-    
     # is the given string a variable, or should it be viewed as a string constant?
     # use the list of all string constants in the given graph
     def _is_string_constant(self, strval):
@@ -310,10 +296,13 @@ class OneClusterSeed:
 class ClusterSeeds:
     # initialize with an AidaJson object and a statement of information need,
     # which is just a json object
-    def __init__(self, graph_obj, soin_obj):
+    def __init__(self, graph_obj, soin_obj, discard_failedqueries = False, earlycutoff = None):
         self.graph_obj = graph_obj
         self.soin_obj = soin_obj
 
+        self.discard_failedqueries = discard_failedqueries
+        self.earlycutoff = earlycutoff
+        
         # parameters for ranking
         self.rank_first_k = 100
         self.bonus_for_novelty = -5
@@ -321,7 +310,7 @@ class ClusterSeeds:
 
         # make seed clusters
         self.hypotheses = self._make_seeds()
-        
+
     # export hypotheses to AidaHypothesisCollection
     def finalize(self):
 
@@ -348,43 +337,59 @@ class ClusterSeeds:
         # if so, we can eliminate all hypotheses with failed queries
         previously_found_hypothesis_without_failed_queries = False
 
+        if self.earlycutoff is not None:
+            facet_cutoff = self.earlycutoff / len(self.soin_obj["facets"])
+            
         # initialize deque with one core hypothesis per facet
-        for facet_index, facet in enumerate(self.soin_obj["facets"]):
+        for facet in self.soin_obj["facets"]:
 
-            # start a new hypothesis
-            core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), \
-                                          AidaHypothesis(self.graph_obj), lweight = 0.0, entrypoints = facet["ere"])
-            hypotheses_todo.append(core_hyp)
+            index = 0
+            for qvar_filler, weight in self._each_entry_point_combination(self.soin_obj["entrypoints"], self.soin_obj["entrypointWeights"], facet):
+                # print("HIER got qvar_filler", qvar_filler, "weight", weight)
+                index += 1
+
+                if self.earlycutoff is not None and index >= facet_cutoff:
+                    # print("early cutoff on cluster seeds: breaking off at", index)
+                    break
+
+                # start a new hypothesis
+                core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), \
+                                              AidaHypothesis(self.graph_obj), qvar_filler, lweight = 0.0)
+                hypotheses_todo.append(core_hyp)
 
         # extend all hypotheses in the deque until they are done
         while len(hypotheses_todo) > 0:
             core_hyp = hypotheses_todo.popleft()
+
+            if self.discard_failedqueries:
+                # we are discarding hypotheses with failed queries
+                if previously_found_hypothesis_without_failed_queries and not(core_hyp.no_failed_core_constraints()):
+                    # don't do anything with this one, discard
+                    # It has failed queries, and we have found at least one hypothesis without failed queries
+                    # print("discarding hypothesis with failed queries")
+                    continue
+                
             if core_hyp.done:
                 # hypothesis finished.
                 # any statements in this one?
                 if not core_hyp.has_statements():
                     # if not, don't record it
                     continue
-                
-                # is this one free of failed queries?
-                if core_hyp.no_failed_core_constraints():
+
+                if self.discard_failedqueries and core_hyp.no_failed_core_constraints():
                     # yes, no failed queries!
                     # is this the first one we find? then remove all previous "done" hypotheses,
                     # as they had failed queries
                     if not previously_found_hypothesis_without_failed_queries:
                         # print("found a hypothesis without failed queries, discarding", len(hypotheses_done))
                         hypotheses_done = [ ]
-                        previously_found_hypothesis_without_failed_queries = True
 
-                    hypotheses_done.append(core_hyp)
-                else:
-                    # this one has failed queries
-                    if not previously_found_hypothesis_without_failed_queries:
-                        # that said, we haven't found a better one yet, so let's keep this one.
-                        hypotheses_done.append(core_hyp)
-                    # else:
-                    #    print("skipping hypothesis with failed queries because there is at least one complete one")
-                
+                if core_hyp.no_failed_core_constraints():
+                    previously_found_hypothesis_without_failed_queries = True
+
+
+                # mark this hypothesis as done
+                hypotheses_done.append(core_hyp)
                 continue
 
             new_hypotheses = core_hyp.extend()
@@ -399,7 +404,35 @@ class ClusterSeeds:
         # at this point, all hypotheses are as big as they can be.
         return hypotheses_done
 
+    #################################
+    # Return any combination of entry point fillers for all the entry points
+    #
+    # returns pairs (qvar_filler, weight)
+    # where qvar_filler is a dictionary mapping query variables to fillers, and
+    # weight is the confidence of the fillers
+    def _each_entry_point_combination(self, entrypoints, entrypoint_weights, facet):
+        # variables occurring in this facet: query constraints have the form [subj, pred, obj] where subj, obj are variables.
+        # collect those
+        facet_variables = set(c[0] for c in facet["queryConstraints"]).union(c[2] for c in facet["queryConstraints"])
+        # variables we are filling: all entry points that appear in the query constraints of this facet
+        entrypoint_variables = sorted(e for e in entrypoints.keys() if e in facet_variables)
 
+        # itertools.product does Cartesian product of n sets
+        # here we do a product of entry point filler indices, so we can access each filler as well as its weight
+        filler_index_tuples = [ ]
+        weights = [ ]
+
+        for filler_indices in itertools.product(*(range(len(entrypoints[v])) for v in entrypoint_variables)):
+            # qvar-> filler mapping: pair each entry point variable with the i-th filler, where i
+            # is the filler index for that entry point variable         
+            filler_index_tuples.append( dict((v, entrypoints[v][i]) for v, i in zip(entrypoint_variables, filler_indices)) )
+            # weight: multiply weights of the fillers
+            weights.append( functools.reduce(operator.mul, (entrypoint_weights[v][i]/100.0 for v, i in zip(entrypoint_variables, filler_indices))))
+
+        for qvar_filler, weight in sorted(zip(filler_index_tuples, weights), key = lambda pair:pair[1], reverse = True):
+            yield (qvar_filler, weight)
+        
+    ##################################
     # given the "temporal" piece of a statement of information need,
     # turn the date and time info in the dictionary
     # into Python datetime objects
