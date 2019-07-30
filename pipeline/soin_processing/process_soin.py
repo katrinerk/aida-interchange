@@ -16,6 +16,7 @@
 from aif import AidaGraph
 from pipeline.soin_processing import SOIN
 from pipeline.soin_processing.TypedDescriptor import *
+from pipeline.soin_processing.templates_and_constants import DEBUG, SCORE_WEIGHTS, DEBUG_SCORE_FLOOR
 
 import json
 import os
@@ -26,6 +27,7 @@ import itertools
 from copy import deepcopy
 
 graph_path = '/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R107'
+
 
 def load_graph(in_dir):
     """
@@ -201,26 +203,76 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
      highest typed_score -> highest descriptor_score).
     :param graph: AidaGraph
     :param entrypoint: Entrypoint
+    :param cluster_to_prototype: dict
+    :param entity_to_cluster: dict
+    :param ep_cap: int
     :return: {Nodes}
     """
-    score_mapping = {}
     results = {}
     for node in graph.nodes():
+
         if node.is_type_statement():
             typed_score = 0
+            name_score = 0
             descriptor_score = 0
+
+            has_type = 0
+            has_name = 0
+            has_descriptor = 0
+
+            num_enttypes = 0
+            num_descriptors = 0
 
             # TODO: Why is this wrapped in a useless tuple??
             for filler in entrypoint.typed_descriptor_list:
                 for typed_descriptor in filler:
-                    typed_score += check_type(node, typed_descriptor)
-                    if check_descriptor(graph, node, typed_descriptor):
-                        descriptor_score += 1
+                    if typed_descriptor.enttype:
+                        has_type = 1
+                        num_enttypes += 1
+                        typed_score += check_type(node, typed_descriptor)
+                    if typed_descriptor.descriptor:
+                        if typed_descriptor.descriptor.descriptor_type == 'String':
+                            has_name = 1
+                            name_score += check_descriptor(graph, node, typed_descriptor)
+                        else:
+                            has_descriptor = 1
+                            num_descriptors += 1
+                            descriptor_score += check_descriptor(graph, node, typed_descriptor)
 
             # Compute the total score, pull the prototype, and add the prototype node to the results dict
-            total_score = typed_score + descriptor_score
+            # Compute the denominator for the score based on what information was present
+            raw_score = (typed_score/100) + (name_score/100) + (descriptor_score/100)
+            score_numerator = 0
+            score_denominator = 0
+
+            if has_type:
+                score_numerator += ((typed_score/num_enttypes)/100) * SCORE_WEIGHTS['type']
+                score_denominator += SCORE_WEIGHTS['type']
+            if has_name:
+                score_numerator += (name_score/100) * SCORE_WEIGHTS['name']
+                score_denominator += SCORE_WEIGHTS['name']
+            if has_descriptor:
+                score_numerator += ((descriptor_score/num_descriptors)/100) * SCORE_WEIGHTS['descriptor']
+                score_denominator += SCORE_WEIGHTS['descriptor']
+
+            if DEBUG:
+                print("Raw Score: " + str(raw_score))
+                print("Score Numerator: " + str(score_numerator))
+                print("Score Denominator: " + str(score_denominator))
+
+            total_score = (score_numerator/score_denominator) * 100
+
+            if DEBUG:
+                print("Normalized Score: " + str(total_score))
+                print()
+                print("##############################################")
+                print()
+                if (total_score > DEBUG_SCORE_FLOOR):
+                    input()
+
             subject_address = next(iter(node.get('subject')))
             prototype = cluster_to_prototype[entity_to_cluster[subject_address]]
+
             if total_score in results:
                 results[total_score].add((total_score, prototype))
             else:
@@ -258,7 +310,6 @@ def resolve_all_entrypoints(graph, entrypoints, cluster_to_prototype, entity_to_
                                                   ep_cap)
         ep_dict[entrypoint.variable[0]] = ep_list
         ep_weight_dict[entrypoint.variable[0]] = ep_weight_list
-
 
     return ep_dict, ep_weight_dict
 

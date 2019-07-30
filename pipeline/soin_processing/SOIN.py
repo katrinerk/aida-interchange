@@ -1,5 +1,5 @@
 import xml.etree.ElementTree as ET
-from pipeline.soin_processing.templates import *
+from pipeline.soin_processing.templates_and_constants import *
 from pipeline.soin_processing.TypedDescriptor import *
 
 import logging

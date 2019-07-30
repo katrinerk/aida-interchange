@@ -1,6 +1,6 @@
 {
   "types": {
-    "ArtifactExistence.DamageDestroy": "ArtifactExistence.DamageDestroy",
+    "ArtifactExistence.DamageDestroy": "Existence.DamageDestroy",
     "Conflict.Attack": "Conflict.Attack",
     "Conflict.Demonstrate": "Conflict.Demonstrate",
 
@@ -84,7 +84,7 @@
   },
   "roles": {
     "ArtifactExistence.DamageDestroy": {"DamagerDestroyer": "Agent", "Damager": "Agent", "Destroyer": "Agent", "Artifact": "Victim", "Instrument": "Instrument", "Place": "Place"},
-    "Conflict.Attack": {"Attacker": "Attacker", "Target": "Target", "Instrument": "Instrument", "Place": "Conflict.Place"},
+    "Conflict.Attack": {"Attacker": "Attacker", "Target": "Target", "Instrument": "Instrument", "Place": "Place"},
     "Conflict.Demonstrate": {"Demonstrator": "Demonstrator", "Place": "Place"},
 
     "Contact.Collaborate": {"Participant": "Participant", "Place": "Place"},
@@ -142,8 +142,8 @@
     "Inspection.SensoryObserve.InspectPeopleOrganization": {"Inspector": "Inspector", "InspectedEntity": "Person", "Place": "Place"},
 
     "Justice.ArrestJailDetain.ArrestJailDetain": {"Jailer": "Agent", "Detainee": "Person", "Crime": "Crime", "Place": "Place"},
-    "Justice.InitiateJudicialProcess.ChargeIndict": {"Prosecutor": "Prosecutor", "Defendant": "Justice.Defendant", "JudgeCourt": "Adjudicator", "Crime": "Crime", "Place": "Place"},
-    "Justice.InitiateJudicialProcess.TrialHearing": {"Prosecutor": "Prosecutor", "Defendant": "Justice.Defendant", "JudgeCourt": "Adjudicator", "Crime": "Crime", "Place": "Place"},
+    "Justice.InitiateJudicialProcess.ChargeIndict": {"Prosecutor": "Prosecutor", "Defendant": "Defendant", "JudgeCourt": "Adjudicator", "Crime": "Crime", "Place": "Place"},
+    "Justice.InitiateJudicialProcess.TrialHearing": {"Prosecutor": "Prosecutor", "Defendant": "Defendant", "JudgeCourt": "Adjudicator", "Crime": "Crime", "Place": "Place"},
     "Justice.Investigate": {"Investigator": "Investigator", "Defendant": "Investigatee", "Crime": "Crime", "Place": "Place"},
     "Justice.JudicialConsequences.Convict": {"JudgeCourt": "Adjudicator", "Defendant": "Defendant", "Crime": "Crime", "Place": "Place"},
     "Justice.JudicialConsequences.Execute": {"Executioner": "Agent", "Defendant": "Person", "Crime": "Crime", "Place": "Place"},
