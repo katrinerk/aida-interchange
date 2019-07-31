@@ -3,7 +3,29 @@
 # from a Json variant of a statement of information need
 #
 # usage:
-# python3 make_clusterseeds.py [options] <statement of information need in json format> <input kb in json format> <outfilename/outdir> 
+# python3 make_clusterseeds.py [options] <statement of information need in json format> <input kb in json format> <outfilename/outdir>
+#
+# parameters:
+#
+# -l, --log: write log. Logs are written to the same directory as the query. Do this for qualitative analysis of the diversity of query responses,
+#    but do not use this during evaluation, as it slows down the script.
+#
+# -n, --maxseeds <arg>: computes *all* seeds, but writes out only the top n. Do use this during evaluation if we get lots of cluster seeds!
+#   We will only get evaluated on a limited number of top hypotheses anyway.
+#
+# -d, --dirs: set this if we have a directory of SoIN files and a directory of graph files.
+#   We will probably not need this during evaluatoin as there won't be that many SoIN files
+#
+# -f, --discard_failed_queries: discards hypotheses that have any failed query constraints. Try not to use this one during evaluation at first,
+#   so that we don't discard hypotheses we might still need.
+#   If we have too many hypotheses and the script runs too slowly, then use this.
+#
+# -c, --early_cutoff <arg>: discards hypotheses early, based only on the scores of entry points in Eric's script, keeping
+#   only the n best. Try not to use this one during evaluation at first,
+#   so that we don't discard hypotheses we might still need.
+#   If we have too many hypotheses and the script runs too slowly, then use this.
+
+
 import sys
 import json
 
@@ -121,6 +143,8 @@ parser.add_option("-d", "--dirs", action = "store_true", dest = "isdir", default
 parser.add_option("-f", "--discard_failed_queries", action = "store_true", dest = "discard_failedqueries", default = False, help = "discard hypotheses that have failed queries")
 # early cutoff: discard queries below the best k based only on entry point scores
 parser.add_option("-c", "--early_cutoff", action = "store", dest = "earlycutoff", type = "int", default = None, help = "discard queries below the best n based only on entry point scores")
+# write logs?
+parser.add_option("-l", "--log", action = "store_true", dest = "log", default = False, help = "write log files to query directory")
 
 
 (options, args) = parser.parse_args()
@@ -141,10 +165,10 @@ if options.isdir:
             # this is one of the files to process.
             print("SoIN", entry)
             out_filename = os.path.join(out_name, "seeds_" + entry)
-            work(soin_filename, graph_dir = graph_name, out_filename= out_filename, maxnumseeds = options.maxnumseeds, log = True,
+            work(soin_filename, graph_dir = graph_name, out_filename= out_filename, maxnumseeds = options.maxnumseeds, log = options.log,
                      discard_failedqueries = options.discard_failedqueries, earlycutoff = options.earlycutoff)
 else:
     # work on a single query
     print("SoIN", soin_name)
-    work(soin_name, graph_filename = graph_name, out_filename = out_name, maxnumseeds = options.maxnumseeds, log = True,
+    work(soin_name, graph_filename = graph_name, out_filename = out_name, maxnumseeds = options.maxnumseeds, log = options.log,
              discard_failedqueries = options.discard_failedqueries, earlycutoff = options.earlycutoff)

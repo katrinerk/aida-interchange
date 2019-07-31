@@ -12,6 +12,7 @@ import math
 import itertools
 import functools
 import operator
+import numpy
 
 
 from os.path import dirname, realpath
@@ -100,6 +101,7 @@ class OneClusterSeed:
             self.unfilled.remove(nfc["index"])
             self.unfillable.add(nfc["index"])
             # update the weight
+            # print("HIER2 adding failed query weight", self.lweight, self.lweight + self.FAILED_QUERY_WT)
             self.lweight += self.FAILED_QUERY_WT
             return [self ]
 
@@ -128,6 +130,7 @@ class OneClusterSeed:
             self.unfilled.remove(nfc["index"])
             self.unfillable.add(nfc["index"])
             # update the weight
+            # print("HIER3 adding failed query weight", self.lweight, self.lweight + self.FAILED_QUERY_WT)
             self.lweight += self.FAILED_QUERY_WT
             return  [ self ]
         else:
@@ -222,11 +225,13 @@ class OneClusterSeed:
         if len(retv) == 0 and has_temporal_constraint:
             # relax temporal matching by one day
             # update weight to reflect relaxing of temporal constraint
+            # print("HIER4 adding failed temporal weight", self.lweight, self.lweight + self.FAILED_TEMPORAL)
             self.lweight += self.FAILED_TEMPORAL
             retv, has_temporal_constraint = self._extend_withvariable(nfc, 1)
             
         if len(retv) == 0 and has_temporal_constraint:
             # relax temporal matching: everything goes
+            # print("HIER5 adding failed temporal weight", self.lweight, self.lweight + self.FAILED_TEMPORAL)
             self.lweight += self.FAILED_TEMPORAL
             retv, has_temporal_constraint = self._extend_withvariable(nfc, 2)
         
@@ -307,6 +312,7 @@ class ClusterSeeds:
         self.rank_first_k = 100
         self.bonus_for_novelty = -5
         self.consider_next_k_in_reranking = 10000
+        self.num_bins = 5
 
         # make seed clusters
         self.hypotheses = self._make_seeds()
@@ -344,8 +350,8 @@ class ClusterSeeds:
         for facet in self.soin_obj["facets"]:
 
             index = 0
-            for qvar_filler, weight in self._each_entry_point_combination(self.soin_obj["entrypoints"], self.soin_obj["entrypointWeights"], facet):
-                # print("HIER got qvar_filler", qvar_filler, "weight", weight)
+            for qvar_filler, entrypoint_weight in self._each_entry_point_combination(self.soin_obj["entrypoints"], self.soin_obj["entrypointWeights"], facet):
+                # print("HIER1 got qvar_filler", qvar_filler, "weight", entrypoint_weight)
                 index += 1
 
                 if self.earlycutoff is not None and index >= facet_cutoff:
@@ -354,7 +360,7 @@ class ClusterSeeds:
 
                 # start a new hypothesis
                 core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), \
-                                              AidaHypothesis(self.graph_obj), qvar_filler, lweight = 0.0)
+                                              AidaHypothesis(self.graph_obj), qvar_filler, lweight = entrypoint_weight)
                 hypotheses_todo.append(core_hyp)
 
         # extend all hypotheses in the deque until they are done
@@ -374,6 +380,7 @@ class ClusterSeeds:
                 # any statements in this one?
                 if not core_hyp.has_statements():
                     # if not, don't record it
+                    # print("empty hypothesis")
                     continue
 
                 if self.discard_failedqueries and core_hyp.no_failed_core_constraints():
@@ -426,8 +433,11 @@ class ClusterSeeds:
             # qvar-> filler mapping: pair each entry point variable with the i-th filler, where i
             # is the filler index for that entry point variable         
             filler_index_tuples.append( dict((v, entrypoints[v][i]) for v, i in zip(entrypoint_variables, filler_indices)) )
-            # weight: multiply weights of the fillers
-            weights.append( functools.reduce(operator.mul, (entrypoint_weights[v][i]/100.0 for v, i in zip(entrypoint_variables, filler_indices))))
+            # weight:
+            # filler weights are in the range of [0, 100]
+            # multiply weights/100 of the fillers,
+            # then take the log to be in log-probability space
+            weights.append( math.log(functools.reduce(operator.mul, (entrypoint_weights[v][i]/100.0 for v, i in zip(entrypoint_variables, filler_indices)))))
 
         for qvar_filler, weight in sorted(zip(filler_index_tuples, weights), key = lambda pair:pair[1], reverse = True):
             yield (qvar_filler, weight)
@@ -454,7 +464,9 @@ class ClusterSeeds:
     # compute a weight for all cluster seeds in self.hypotheses
     def _rank_seeds(self):
         # group seeds by their current weight,
-        # which depends on whether they missed any query constraints
+        # which depends on the goodness of their entry points
+        # and on whether they missed any query constraints
+        # this is a list of lists of hypotheses
         hypothesis_groups = self._group_seed_byweight(self.hypotheses)
         
         # initial ranking by connectedness, using the hypothesis groups
@@ -468,20 +480,48 @@ class ClusterSeeds:
         return ranking
 
     # group hypotheses by their lweight,
-    # which indicates whether they failed to meet any query constraints
+    # which indicates how good their entrypoints were,
+    # and whether they failed to meet any query constraints
     def _group_seed_byweight(self, hypotheses):
-        grouping = { }
+        # sort hypotheses by weight, highest first
+        # but first make sure each hypothesis has a weight
         for hyp in hypotheses:
             if hyp.lweight is None:
                 # this should not happen, but just to make sure
                 hyp.lweight = 0.0
                 
-            if hyp.lweight not in grouping:
-                grouping[hyp.lweight] = [ ]
+        hypotheses_sorted = sorted(hypotheses, key = lambda h: h.lweight, reverse = True)
+        hypothesis_weights = [h.lweight for h in hypotheses_sorted]
 
-            grouping[hyp.lweight].append(hyp)
+        # make self.num_bins bins of weights
+        bin_sizes, dummy = numpy.histogram(hypothesis_weights, self.num_bins)
 
-        return grouping
+        # print("HIER1", hypotheses_sorted, bin_sizes)
+        bins = [ ]
+        
+        lower_index = 0
+        for binsize in bin_sizes:
+            bins.append(hypotheses_sorted[ lower_index : lower_index + binsize] )
+            lower_index += binsize
+            
+
+        ## for ix, b in enumerate(bins):
+        ##     print("HIER bin", ix, [h.lweight for h in b])
+            
+        return bins
+        ## # make list of hypothesis weights
+        ## grouping = { }
+        ## for hyp in hypotheses:
+        ##     if hyp.lweight is None:
+        ##         # this should not happen, but just to make sure
+        ##         hyp.lweight = 0.0
+                
+        ##     if hyp.lweight not in grouping:
+        ##         grouping[hyp.lweight] = [ ]
+
+        ##     grouping[hyp.lweight].append(hyp)
+
+        ## return grouping
     
     # weighting based on connectedness of a cluster seed:
     # sum of degrees of EREs in the cluster.
@@ -490,11 +530,18 @@ class ClusterSeeds:
     # where the grouping is a mapping from weight to group
     def _rank_seed_connectedness(self, grouped_hypotheses):
         ranking = [ ]
-        # sort groups by weight, highest weight first
-        for lweight, group in sorted(grouped_hypotheses.items(), reverse = True):
+        for group in grouped_hypotheses:
             ranking += self._rank_seed_connectedness_forgroup(group)
 
+        # print("HIER ranking", [h.lweight for h in ranking])
         return ranking
+    
+        ## ranking = [ ]
+        ## # sort groups by weight, highest weight first
+        ## for lweight, group in sorted(grouped_hypotheses.items(), reverse = True):
+        ##     ranking += self._rank_seed_connectedness_forgroup(group)
+
+        ## return ranking
 
     #  do the actual work in connectedness ranking
     def _rank_seed_connectedness_forgroup(self, hypotheses):
