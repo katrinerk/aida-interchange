@@ -84,9 +84,12 @@ def work(soin_filename, graph_filename = None, graph_dir = None, out_filename = 
     clusterseed_obj = ClusterSeeds(graph_obj, soin_obj, discard_failedqueries = discard_failedqueries, earlycutoff = earlycutoff)
 
     # and expand on them
+    print("Expansion of seeds")
     hypothesis_obj = ClusterExpansion(graph_obj, clusterseed_obj.finalize())
     hypothesis_obj.type_completion()
     hypothesis_obj.affiliation_completion()
+
+    print("Writing seeds")
 
     # write hypotheses out in json format.
 

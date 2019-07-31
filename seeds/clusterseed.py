@@ -30,7 +30,7 @@ from seeds.datecheck import AidaIncompleteDate, temporal_constraint_match
 # just a data structure, doesn't do much.
 class OneClusterSeed:
     def __init__(self, graph_obj, core_constraints, temporal_constraints, hypothesis, qvar_filler, lweight = 0.0,
-                    unfilled = None, unfillable = None):
+                    unfilled = None, unfillable = None, entrypoints = None):
         # the following data is not changed, and is kept just for info
         self.graph_obj = graph_obj
         self.core_constraints = core_constraints
@@ -52,6 +52,8 @@ class OneClusterSeed:
 
         # mapping from query variable to filler: string to string, value strings are IDs in graph_obj
         self.qvar_filler = qvar_filler
+        # entry points (will not be used in ranking this hypothesis later)
+        self.entrypoints = entrypoints
 
         # unfilled, unfillable are indices on self.core_constraints
         if unfilled is None: self.unfilled = set(range(len(core_constraints)))
@@ -60,9 +62,10 @@ class OneClusterSeed:
         if unfillable is None: self.unfillable = set()
         else: self.unfillable = unfillable
 
-        # some weights
+        # some weights for things that might go wrong during query creation
         self.FAILED_QUERY_WT = -0.5
         self.FAILED_TEMPORAL = -0.5
+        self.FAILED_ONTOLOGY = -0.5
 
 
     # finalize:
@@ -89,52 +92,69 @@ class OneClusterSeed:
             self.unfilled = set()
             return [ self ]
 
-        # nfc is a structure with entries "predicate", "role", "erelabel", "variable"
-        # find statements that match this constraint, and
-        # return a list of extended hypotheses to match this.
-        # these hypotheses have not been run through the filter yet
-        # format: list of tuples (new hypothesis, new_stmt, variable, filler)
-        new_hypotheses = self._extend(nfc)
-
-        if len(new_hypotheses) == 0:
-            # something has gone wrong
+        elif nfc["failed"]:
+            # this particular constraint was not fillable, and will never be fillable.
             self.unfilled.remove(nfc["index"])
             self.unfillable.add(nfc["index"])
             # update the weight
-            # print("HIER2 adding failed query weight", self.lweight, self.lweight + self.FAILED_QUERY_WT)
+            # print("adding failed query weight", self.lweight, self.lweight + self.FAILED_QUERY_WT)
             self.lweight += self.FAILED_QUERY_WT
             return [self ]
+            
+        else:
+            # nfc is a structure with entries "predicate", "role", "erelabel", "variable"
+            # find statements that match this constraint, and
+            # return a list of extended hypotheses to match this.
+            # these hypotheses have not been run through the filter yet
+            # format: list of tuples (new hypothesis, new_stmt, variable, filler)
+            new_hypotheses = self._extend(nfc)
 
-        # determine the constraint that we are matching
-        # and remove it from the list of unfilled constraints
-        constraint = self.core_constraints[ nfc["index"] ]
+            if len(new_hypotheses) == 0:
+                # something has gone wrong
+                self.unfilled.remove(nfc["index"])
+                self.unfillable.add(nfc["index"])
+                # update the weight
+                # print("adding failed query weight", self.lweight, self.lweight + self.FAILED_QUERY_WT)
+                self.lweight += self.FAILED_QUERY_WT
+                return [self ]
 
-        retv = [ ]
-        for new_hypothesis, stmtlabel, variable, filler in new_hypotheses:
-            if self.filter.validate(new_hypothesis, stmtlabel):
-                # yes: make a new OneClusterSeed object with this extended hypothesis
-                new_qvar_filler = self.qvar_filler.copy()
-                if variable is not None and filler is not None and self.graph_obj.is_ere(filler):
-                    new_qvar_filler[ variable] = filler
+            # determine the constraint that we are matching
+            # and remove it from the list of unfilled constraints
+            constraint = self.core_constraints[ nfc["index"] ]
 
-                # changes to unfilled, not to unfillable
-                new_unfilled = self.unfilled.difference([nfc["index"]])
-                new_unfillable = self.unfillable.copy()
+            retv = [ ]
+            for new_hypothesis, stmtlabel, variable, filler in new_hypotheses:
+                if self.filter.validate(new_hypothesis, stmtlabel):
+                    # yes: make a new OneClusterSeed object with this extended hypothesis
+                    new_qvar_filler = self.qvar_filler.copy()
+                    if variable is not None and filler is not None and self.graph_obj.is_ere(filler):
+                        new_qvar_filler[ variable] = filler
 
-                retv.append(OneClusterSeed(self.graph_obj, self.core_constraints, self.temporal_constraints, new_hypothesis, new_qvar_filler,
-                                               lweight = self.lweight, unfilled = new_unfilled, unfillable = new_unfillable))
+                        # changes to unfilled, not to unfillable
+                    new_unfilled = self.unfilled.difference([nfc["index"]])
+                    new_unfillable = self.unfillable.copy()
+
+                    if nfc["relaxed"]:
+                        # print("adding failed ontology weight", self.lweight, self.lweight + self.FAILED_ONTOLOGY)
+                        new_weight = self.lweight + self.FAILED_ONTOLOGY
+                    else:
+                        new_weight = self.lweight
+
+                    retv.append(OneClusterSeed(self.graph_obj, self.core_constraints, self.temporal_constraints, new_hypothesis, new_qvar_filler,
+                                                lweight = new_weight, unfilled = new_unfilled, unfillable = new_unfillable,
+                                                entrypoints = self.entrypoints))
                 
 
-        if len(retv) == 0:
-            # all the fillers were filtered away
-            self.unfilled.remove(nfc["index"])
-            self.unfillable.add(nfc["index"])
-            # update the weight
-            # print("HIER3 adding failed query weight", self.lweight, self.lweight + self.FAILED_QUERY_WT)
-            self.lweight += self.FAILED_QUERY_WT
-            return  [ self ]
-        else:
-            return retv
+            if len(retv) == 0:
+                # all the fillers were filtered away
+                self.unfilled.remove(nfc["index"])
+                self.unfillable.add(nfc["index"])
+                # update the weight
+                # print("all candidate statements filtered away, adding failed query weight", self.lweight, self.lweight + self.FAILED_QUERY_WT)
+                self.lweight += self.FAILED_QUERY_WT
+                return  [ self ]
+            else:
+                return retv
         
     # return true if there is at least one unfilled core constraint remaining
     def core_constraints_remaining(self):
@@ -150,49 +170,144 @@ class OneClusterSeed:
     # next fillable constraint from the core constraints list,
     # or None if none fillable
     def _next_fillable_constraint(self):
+        # iterate over unfilled query constraints to see if we can find one that can be filled
         for constraint_index in self.unfilled:
             
             subj, pred, obj = self.core_constraints[constraint_index]
 
-            # if we can fill this constraint, then either subj is known and
-            # obj is unknown/constraint, or obj is known and subj is unknown/constraint
-            for known, unknown, knownrole, unknownrole in [(subj, obj, "subject", "object"), (obj, subj, "object", "subject")]:
-                if known in self.graph_obj.thegraph:
-                    knownere = known
-                elif known in self.qvar_filler:
-                    knownere = self.qvar_filler[known]
-                else:
-                    knownere = None
+            # if either subj or obj is known (is an ERE or has an entry in qvar_filler,
+            # then we should be able to fill this constraint now, or it is unfillable
+            subj_filler = self._known_coreconstraintentry(subj)
+            obj_filler = self._known_coreconstraintentry(obj)
+            
+            if subj_filler is not None:
+                return self._fill_constraint(constraint_index, subj_filler, "subject", pred, obj, "object")
 
+            elif obj_filler is not None:
+                return self._fill_constraint(constraint_index, obj_filler, "object", pred, subj, "subject")
+                
+            else:
+                # this constraint cannot be filled at this point,
+                # wait and see if it can be filled some other time
+                continue
 
-                if knownere is not None:
-                    # we do seem to have a fillable constraint
-                    # what are the statements that could fill it?
-                    stmt_candidates = list(self.graph_obj.each_ere_adjacent_stmt(knownere, pred, knownrole))
-                        
-                    # check if unknown is a constant in the graph,
-                    # in which case it is not really unknown
-                    if self._is_string_constant(unknown):
-                        # which of the statement candidates have the right filler?
-                        stmt_candidates = [s for s in stmt_candidates if self.graph_obj.thegraph[s][unknownrole] == unknown]
-                        return {
-                            "index" : constraint_index,
-                            "stmt" : stmt_candidates,
-                            "role" : knownrole,
-                            "has_variable" : False
-                            }
-                        
-                    else:
-                        # nope, we have a variable we can fill
-                        return {
-                            "index" : constraint_index,
-                            "stmt" : stmt_candidates,
-                            "variable" : unknown,
-                            "role" : knownrole,
-                            "has_variable" : True
-                            }
-
+        # reaching this point, and not having returned anything:
+        # this means we do not have any fillable constraints left
         return None
+
+            
+
+
+
+    # given a subject or object from a core constraint, is this an ERE ID from the graph
+    # or a variable for which we already know the filler?
+    # if so, return the filler ERE ID. otherwise none
+    def _known_coreconstraintentry(self, entry):
+        if entry in self.graph_obj.thegraph: return entry
+        elif entry in self.qvar_filler: return self.qvar_filler[entry]
+        else: return None
+
+    # see if this label can be generalized by cutting out the lowest level of specificity.
+    # returns: generalized label, plus role (or None)
+    def _generalize_label(self, label):
+        pieces = label.split("_")
+        if len(pieces) == 1:
+            labelclass = label
+            labelrole = ""
+        elif len(pieces) == 2:
+            labelclass = pieces[0]
+            labelrole = pieces[1]
+        else:
+            print("unexpected number of underscores in label, could not split", label)
+            return (None, None)
+    
+        pieces = labelclass.split(".")
+        if len(pieces) <= 2:
+            # no more general class possible
+            return (None, None)
+        
+        # we can try a more lenient match
+        labelclass = ".".join(pieces[:-1])
+        return (labelclass, labelrole)
+
+    # returns list of statement candidates bordering ERE
+    # that have ERE in role 'role' (subject, object) and have predicate 'pred'.
+    # also returns whether the statements had to be relaxed.
+    # If no statements could be found, returnsNone
+    def _statement_candidates(self, ere, pred, role):
+        candidates = list(self.graph_obj.each_ere_adjacent_stmt(ere, pred, role))
+
+        if len(candidates) > 0:
+            # success, we found some
+            return { "candidates" : candidates,
+                     "relaxed" : False }
+
+        # no success. see if more lenient match will work
+        lenient_pred, lenient_role = self._generalize_label(pred)
+
+        # print("no match for", pred, "checking", lenient_pred, lenient_role)
+        
+        if lenient_pred is None:
+            # no generalization possible
+            return None
+        else:
+            # try the more general class
+            candidates = []
+            for stmt in self.graph_obj.each_ere_adjacent_stmt_anyrel(ere):
+                if self.graph_obj.stmt_predicate(stmt).startswith(lenient_pred) and self.graph_obj.stmt_predicate(stmt).endswith(lenient_role):
+                    candidates.append(stmt)
+
+            if len(candidates) > 0:
+                # success, we found some
+                # print("success")
+                return { "candidates" : candidates,
+                            "relaxed" : True }
+            else:
+                return None
+                
+    # try to fill this constraint from the graph, either strictly or leniently
+    def _fill_constraint(self, constraint_index, knownere, knownrole, pred, unknown, unknownrole):
+        # find statements that could fill the role
+        candidates = self._statement_candidates(knownere, pred, knownrole)
+        
+        if candidates is None:
+            # no candidates found at all, constraint is unfillable
+            return { "index" : constraint_index,
+                    "failed" : True
+                         }
+        
+        # check if unknown is a constant in the graph,
+        # in which case it is not really unknown
+        if self._is_string_constant(unknown):
+            # which of the statement candidates have the right filler?
+            candidates = [s for s in candidates if self.graph_obj.thegraph[s][unknownrole] == unknown]
+            if len(candidates) == 0:
+                return { "index" : constraint_index,
+                    "failed" : True
+                         }
+            else:
+                return {
+                    "index" : constraint_index,
+                    "stmt" : candidates["candidates"],
+                    "role" : knownrole,
+                    "has_variable" : False,
+                    "relaxed" : candidates["relaxed"],
+                    "failed" : False
+                    }
+                        
+        else:
+            # nope, we have a variable we can fill
+            # any fillers?
+            return {
+                "index" : constraint_index,
+                "stmt" : candidates["candidates"],
+                "variable" : unknown,
+                "role" : knownrole,
+                "has_variable" : True,
+                "relaxed" : candidates["relaxed"],
+                "failed" : False
+                }
+        
 
     # nfc is a structure with entries "predicate", "role", "erelabel", "variable"
     # find statements that match this constraint, and
@@ -225,13 +340,13 @@ class OneClusterSeed:
         if len(retv) == 0 and has_temporal_constraint:
             # relax temporal matching by one day
             # update weight to reflect relaxing of temporal constraint
-            # print("HIER4 adding failed temporal weight", self.lweight, self.lweight + self.FAILED_TEMPORAL)
+            # print("adding failed temporal weight", self.lweight, self.lweight + self.FAILED_TEMPORAL)
             self.lweight += self.FAILED_TEMPORAL
             retv, has_temporal_constraint = self._extend_withvariable(nfc, 1)
             
         if len(retv) == 0 and has_temporal_constraint:
             # relax temporal matching: everything goes
-            # print("HIER5 adding failed temporal weight", self.lweight, self.lweight + self.FAILED_TEMPORAL)
+            # print("adding failed temporal weight", self.lweight, self.lweight + self.FAILED_TEMPORAL)
             self.lweight += self.FAILED_TEMPORAL
             retv, has_temporal_constraint = self._extend_withvariable(nfc, 2)
         
@@ -322,6 +437,7 @@ class ClusterSeeds:
 
         # ranking is a list of the hypotheses in self.hypotheses,
         # best first
+        print("Making the ranking")
         ranking = self._rank_seeds()
 
         # turn ranking into log weights:
@@ -345,7 +461,8 @@ class ClusterSeeds:
 
         if self.earlycutoff is not None:
             facet_cutoff = self.earlycutoff / len(self.soin_obj["facets"])
-            
+
+        print("Initializing cluster seeds")
         # initialize deque with one core hypothesis per facet
         for facet in self.soin_obj["facets"]:
 
@@ -360,9 +477,11 @@ class ClusterSeeds:
 
                 # start a new hypothesis
                 core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), \
-                                              AidaHypothesis(self.graph_obj), qvar_filler, lweight = entrypoint_weight)
+                                              AidaHypothesis(self.graph_obj), qvar_filler, lweight = entrypoint_weight,
+                                              entrypoints = list(qvar_filler.keys()))
                 hypotheses_todo.append(core_hyp)
 
+        print("Extending cluster seeds")
         # extend all hypotheses in the deque until they are done
         while len(hypotheses_todo) > 0:
             core_hyp = hypotheses_todo.popleft()
@@ -562,6 +681,9 @@ class ClusterSeeds:
     # produce a new such list where objects are ranked more highly
     # if they differ most from all the top k items
     def _rank_seed_novelty(self, hypotheses):
+        if len(hypotheses) == 0:
+            return hypotheses
+        
         ranked = [ hypotheses[0] ]
         torank = hypotheses[1:]
 
@@ -603,6 +725,10 @@ class ClusterSeeds:
 
             this_value = 0
             for qvar, filler in hyp.qvar_filler.items():
+                if qvar in hyp.entrypoints:
+                    # do not count entry point variables when checking for novelty
+                    # print("skipping variable in ranking", qvar)
+                    continue
                 if qvar in qvar_characterization.keys():
                     if filler in qvar_characterization[ qvar ]:
                         # there are higher-ranked hypotheses that have the same filler
