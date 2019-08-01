@@ -66,6 +66,7 @@ class OneClusterSeed:
         self.FAILED_QUERY_WT = -0.5
         self.FAILED_TEMPORAL = -0.5
         self.FAILED_ONTOLOGY = -0.5
+        self.DUPLICATE_FILLER = -10
 
 
     # finalize:
@@ -110,6 +111,7 @@ class OneClusterSeed:
             new_hypotheses = self._extend(nfc)
 
             if len(new_hypotheses) == 0:
+                # print("HIER no new hypotheses")
                 # something has gone wrong
                 self.unfilled.remove(nfc["index"])
                 self.unfillable.add(nfc["index"])
@@ -124,24 +126,29 @@ class OneClusterSeed:
 
             retv = [ ]
             for new_hypothesis, stmtlabel, variable, filler in new_hypotheses:
+                add_weight = 0
+                
                 if self.filter.validate(new_hypothesis, stmtlabel):
                     # yes: make a new OneClusterSeed object with this extended hypothesis
                     new_qvar_filler = self.qvar_filler.copy()
                     if variable is not None and filler is not None and self.graph_obj.is_ere(filler):
                         new_qvar_filler[ variable] = filler
+                        if filler in self.qvar_filler.values():
+                            # some other variable has been mapped to the same ERE
+                            add_weight += self.DUPLICATE_FILLER
+                            # print("duplicate filler", new_qvar_filler)
+                            
 
-                        # changes to unfilled, not to unfillable
+                    # changes to unfilled, not to unfillable
                     new_unfilled = self.unfilled.difference([nfc["index"]])
                     new_unfillable = self.unfillable.copy()
 
                     if nfc["relaxed"]:
                         # print("adding failed ontology weight", self.lweight, self.lweight + self.FAILED_ONTOLOGY)
-                        new_weight = self.lweight + self.FAILED_ONTOLOGY
-                    else:
-                        new_weight = self.lweight
+                        add_weight += self.FAILED_ONTOLOGY
 
                     retv.append(OneClusterSeed(self.graph_obj, self.core_constraints, self.temporal_constraints, new_hypothesis, new_qvar_filler,
-                                                lweight = new_weight, unfilled = new_unfilled, unfillable = new_unfillable,
+                                                lweight = self.lweight + add_weight, unfilled = new_unfilled, unfillable = new_unfillable,
                                                 entrypoints = self.entrypoints))
                 
 
@@ -179,8 +186,12 @@ class OneClusterSeed:
             # then we should be able to fill this constraint now, or it is unfillable
             subj_filler = self._known_coreconstraintentry(subj)
             obj_filler = self._known_coreconstraintentry(obj)
+
+            if subj_filler is not None and obj_filler is not None:
+                # new edge between two known variables
+                return self._fill_constraint_knowneres(constraint_index, subj_filler, pred, obj_filler)
             
-            if subj_filler is not None:
+            elif subj_filler is not None:
                 return self._fill_constraint(constraint_index, subj_filler, "subject", pred, obj, "object")
 
             elif obj_filler is not None:
@@ -265,11 +276,12 @@ class OneClusterSeed:
             else:
                 return None
                 
-    # try to fill this constraint from the graph, either strictly or leniently
+    # try to fill this constraint from the graph, either strictly or leniently.
+    # one side of this constraint is a known ERE, the other side can be anything
     def _fill_constraint(self, constraint_index, knownere, knownrole, pred, unknown, unknownrole):
         # find statements that could fill the role
         candidates = self._statement_candidates(knownere, pred, knownrole)
-        
+
         if candidates is None:
             # no candidates found at all, constraint is unfillable
             return { "index" : constraint_index,
@@ -308,6 +320,36 @@ class OneClusterSeed:
                 "failed" : False
                 }
         
+    # try to fill this constraint from the graph, either strictly or leniently.
+    # both sides of this constraint are known EREs
+    def _fill_constraint_knowneres(self, constraint_index, ere1, pred, ere2):
+        # find statements that could fill the role
+        possible_candidates = self._statement_candidates(ere1, pred, "subject")
+
+        if possible_candidates is None:
+            # no candidates found at all, constraint is unfillable
+            return { "index" : constraint_index,
+                    "failed" : True
+                         }
+
+        # we did find candidates.
+        # check whether any of the candidates has ere2 as its object
+        candidates = [c for c in possible_candidates["candidates"] if self.graph_obj.stmt_object == ere2]
+        if len(candidates) == 0:
+            # constraint is unfillable
+            return { "index" : constraint_index,
+                    "failed" : True
+                         }
+
+        else:
+            return { "index" : constraint_index,
+                         "failed" : False,
+                         "stmt" : candidates,
+                         "has_variable" : False,
+                         "relaxed" : candidates["relaxed"]
+                         }
+            
+        
 
     # nfc is a structure with entries "predicate", "role", "erelabel", "variable"
     # find statements that match this constraint, and
@@ -319,7 +361,8 @@ class OneClusterSeed:
             return [ ]
 
         if not nfc["has_variable"]:
-            # this next fillable constraint states a constant string value about a known ERE.
+            # this next fillable constraint states a constant string value about a known ERE,
+            # or it states a new connection between known EREs.
             # we do have more than zero matching statements. add just the first one, they are identical
             stmtlabel = nfc["stmt"][0]
             if stmtlabel not in self.graph_obj.thegraph:
@@ -386,13 +429,62 @@ class OneClusterSeed:
                     has_temporal_constraint = True
                     continue
 
+                # we also check wether including this statement will violate another constraint.
+                # if so, we do  not include it
+                if self._second_constraint_violated(nfc["variable"], filler, nfc["index"]):
+                    # print("second constraint violated, skipping", stmtlabel[-5:], self.graph_obj.stmt_predicate(stmtlabel))
+                    continue
+
             # can this statement be added to the hypothesis without contradiction?
             # extended hypothesis
             new_hypothesis = self.hypothesis.extend(stmtlabel, core = True)
             retv.append( (new_hypothesis, stmtlabel, nfc["variable"], filler) )
 
         return (retv, has_temporal_constraint)
-    
+
+    # second constraint violated: given a variable and its filler,
+    # see if filling this qvar with this filler will make any constraint that is yet unfilled unfillable
+    def _second_constraint_violated(self, variable, filler, exceptindex):
+        for constraint_index in self.unfilled:
+            if constraint_index == exceptindex:
+                # this was the constraint we were just going to fill, don't re-check it
+                continue
+            
+            subj, pred, obj = self.core_constraints[constraint_index]
+            if subj == variable and obj in self.qvar_filler:
+                # found a constraint involving this variable and another variable that has already been filled
+                candidates = self._statement_candidates(filler, pred, "subject")
+                if candidates is None:
+                    ## print("trying to add", filler[-5:], "for", variable, "originally doing", self.core_constraints[exceptindex], exceptindex, constraint_index)
+                    ## print("could not fill", subj, pred, obj, "where obj is ", self.qvar_filler[obj][-5:])
+                    ## input()
+                    return True
+                else:
+                    candidates = [c for c in candidates["candidates"] if self.graph_obj.stmt_object == self.qvar_filler[obj]]
+                    if len(candidates) == 0:
+                        ## print("trying to add", filler[-5:], "for", variable, "originally doing", self.core_constraints[exceptindex], exceptindex, constraint_index)
+                        ## print("could not fill", subj, pred, obj, "where obj is ", self.qvar_filler[obj][-5:])
+                        ## input()
+                        return True
+                    
+            elif obj == variable and subj in self.qvar_filler:                
+                # found a constraint involving this variable and another variable that has already been filled
+                candidates = self._statement_candidates(filler, pred, "object")
+                if candidates is None:
+                    ## print("trying to add", filler[-5:], "for", variable, "originally doing", self.core_constraints[exceptindex], exceptindex, constraint_index)
+                    ## print("could not fill", subj, pred, obj, "where subj is ", self.qvar_filler[subj][-5:])
+                    ## input()
+                    return True
+                else:
+                    candidates = [c for c in candidates["candidates"] if self.graph_obj.stmt_subject == self.qvar_filler[subj]]
+                    if len(candidates) == 0:
+                        ## print("trying to add", filler[-5:], "for", variable, "originally doing", self.core_constraints[exceptindex], exceptindex, constraint_index)
+                        ## print("could not fill", subj, pred, obj, "where subj is ", self.qvar_filler[subj][-5:])
+                        ## input()
+                        return True
+
+        return False
+                
     # given a next_fillable_constraint dictionary,
     # if it has a role of "subject" return 'object' and vice versa
     def _nfc_otherrole(self, nfc):
@@ -455,6 +547,21 @@ class ClusterSeeds:
         hypotheses_todo = deque()
         hypotheses_done = [ ]
 
+        # HIER
+        QS_COUNT_CUTOFF = 3
+        QS_CUTOFF = 100
+        qvar_signatures = { }
+        def make_one_signature(keys, qfdict):
+            return "_".join(k + "|" + qfdict[k][-5:] for k in sorted(keys))
+            
+        def make_qvar_signature(h):
+            if len(h.qvar_filler) - len(h.entrypoints) < QS_COUNT_CUTOFF:
+                return None
+            # return "_".join(k + "|" + v for k, v in sorted(h.qvar_filler.items()))
+            # return "_".join(k + "|" + v[-5:] for k, v in sorted(h.qvar_filler.items()))
+            qs_entry = make_one_signature(h.entrypoints, h.qvar_filler)
+            return [qs_entry + "_" + make_one_signature(keys, h.qvar_filler) for keys in itertools.combinations(sorted(k for k in h.qvar_filler.keys() if k not in h.entrypoints), 2)]
+
         # have we found any hypothesis without failed queries yet?
         # if so, we can eliminate all hypotheses with failed queries
         previously_found_hypothesis_without_failed_queries = False
@@ -462,13 +569,17 @@ class ClusterSeeds:
         if self.earlycutoff is not None:
             facet_cutoff = self.earlycutoff / len(self.soin_obj["facets"])
 
+        ################
         print("Initializing cluster seeds")
         # initialize deque with one core hypothesis per facet
         for facet in self.soin_obj["facets"]:
 
             index = 0
             for qvar_filler, entrypoint_weight in self._each_entry_point_combination(self.soin_obj["entrypoints"], self.soin_obj["entrypointWeights"], facet):
-                # print("HIER1 got qvar_filler", qvar_filler, "weight", entrypoint_weight)
+                ## print("entry points")
+                ## for q, f in qvar_filler.items():
+                ##     print(q, f[-5:])
+                ## print("====")
                 index += 1
 
                 if self.earlycutoff is not None and index >= facet_cutoff:
@@ -481,10 +592,29 @@ class ClusterSeeds:
                                               entrypoints = list(qvar_filler.keys()))
                 hypotheses_todo.append(core_hyp)
 
+        ################
         print("Extending cluster seeds")
+        testindex = 0
         # extend all hypotheses in the deque until they are done
         while len(hypotheses_todo) > 0:
+            testindex += 1
+            if testindex % 500 == 0:
+                print("hypotheses to do", len(hypotheses_todo), "hypotheses done", len(hypotheses_done))
+                #input()
+            # if len(hypotheses_done) > 5000:
+            #       break
+            
             core_hyp = hypotheses_todo.popleft()
+            qs = make_qvar_signature(core_hyp)
+            if qs is not None:
+                if any(qvar_signatures.get(q1, 0) >= QS_CUTOFF for q1 in qs):
+                    # do not process this hypothesis further
+                    # print("skipping hypothesis", qs)
+                    continue
+                else:
+                    for q1 in qs:
+                        # print("HIER", q1, qvar_signatures.get(q1, 0))
+                        qvar_signatures[ q1] = qvar_signatures.get(q1, 0) + 1
 
             if self.discard_failedqueries:
                 # we are discarding hypotheses with failed queries
@@ -516,6 +646,11 @@ class ClusterSeeds:
 
                 # mark this hypothesis as done
                 hypotheses_done.append(core_hyp)
+                ## for q, v in core_hyp.qvar_filler.items():
+                ##     print("qvar", q, v[-5:])
+                ## print([s[-5:] for s in core_hyp.hypothesis.stmts])
+                ## print("----")
+                        
                 continue
 
             new_hypotheses = core_hyp.extend()
@@ -523,6 +658,7 @@ class ClusterSeeds:
             # we explore one hypothesis to the end before we start the next.
             # this way we can see early if we have hypotheses without failed queries
             hypotheses_todo.extendleft(new_hypotheses)
+            # hypotheses_todo.extend(new_hypotheses)
 
         if not previously_found_hypothesis_without_failed_queries:
             print("Warning: All hypotheses had at least one failed query.")
@@ -549,9 +685,16 @@ class ClusterSeeds:
         weights = [ ]
 
         for filler_indices in itertools.product(*(range(len(entrypoints[v])) for v in entrypoint_variables)):
+
             # qvar-> filler mapping: pair each entry point variable with the i-th filler, where i
-            # is the filler index for that entry point variable         
-            filler_index_tuples.append( dict((v, entrypoints[v][i]) for v, i in zip(entrypoint_variables, filler_indices)) )
+            # is the filler index for that entry point variable
+            qvar_fillers = dict((v, entrypoints[v][i]) for v, i in zip(entrypoint_variables, filler_indices))
+
+            # reject if any two variables are mapped to the same ERE
+            if any (qvar_fillers[v1] == qvar_fillers[v2] for v1 in entrypoint_variables for v2 in entrypoint_variables if v1 != v2):
+                continue
+            
+            filler_index_tuples.append( qvar_fillers)
             # weight:
             # filler weights are in the range of [0, 100]
             # multiply weights/100 of the fillers,
@@ -582,11 +725,27 @@ class ClusterSeeds:
     #########################
     # compute a weight for all cluster seeds in self.hypotheses
     def _rank_seeds(self):
+        ## qf_signatures = set()
+        ## for h in self.hypotheses:
+        ##     s = "___".join([ key + "_" + filler[-6:] for key, filler in sorted(h.qvar_filler.items())])
+        ##     if s in qf_signatures:
+        ##         print("duplicate signature")
+        ##     qf_signatures.add(s)
+                
+
+        ## input()
+        
         # group seeds by their current weight,
         # which depends on the goodness of their entry points
         # and on whether they missed any query constraints
         # this is a list of lists of hypotheses
         hypothesis_groups = self._group_seed_byweight(self.hypotheses)
+        # print("HIER group sizes", [len(g) for g in hypothesis_groups])
+        #print("HIER first group weights", [h.lweight for h in hypothesis_groups[0]])
+        #print("HIER last group weights", [h.lweight for h in hypothesis_groups[-1]])
+        ## for g in hypothesis_groups:
+        ##     print("group weights", [h.lweight for h in g])
+        ##     print("duplicate weights?", [any(h.qvar_filler[v1] == h.qvar_filler[v2] for h in g for v1 in h.qvar_filler.keys() for v2 in h.qvar_filler.keys() if v1 != v2) for h in g])
         
         # initial ranking by connectedness, using the hypothesis groups
         ranking= self._rank_seed_connectedness(hypothesis_groups)
