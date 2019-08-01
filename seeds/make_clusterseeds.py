@@ -24,7 +24,11 @@
 #   only the n best. Try not to use this one during evaluation at first,
 #   so that we don't discard hypotheses we might still need.
 #   If we have too many hypotheses and the script runs too slowly, then use this.
-
+#
+# -r, --rank_cutoff <arg>: discards hypotheses early if there are at least <arg> other hypotheses
+#   that coincide with this one in 3 query variable fillers
+#   We do need this in the evaluation! Otherwise combinatory explosion happens.
+#   I've standard-set this to 100.
 
 import sys
 import json
@@ -54,7 +58,7 @@ def shortestname(label, graph_obj):
 ##
 # function that actually does the work
 def work(soin_filename, graph_filename = None, graph_dir = None, out_filename = None, maxnumseeds = None, log = False,
-             discard_failedqueries = False, earlycutoff = False):
+             discard_failedqueries = False, earlycutoff = False, qs_cutoff = None):
 
     with open(soin_filename, 'r') as fin:
         soin_obj = json.load(fin)
@@ -81,7 +85,7 @@ def work(soin_filename, graph_filename = None, graph_dir = None, out_filename = 
     ###########
     # create cluster seeds
 
-    clusterseed_obj = ClusterSeeds(graph_obj, soin_obj, discard_failedqueries = discard_failedqueries, earlycutoff = earlycutoff)
+    clusterseed_obj = ClusterSeeds(graph_obj, soin_obj, discard_failedqueries = discard_failedqueries, earlycutoff = earlycutoff, qs_cutoff = qs_cutoff)
 
     # and expand on them
     print("Expansion of seeds")
@@ -145,9 +149,11 @@ parser.add_option("-d", "--dirs", action = "store_true", dest = "isdir", default
 # discard hypotheses with failed queries?
 parser.add_option("-f", "--discard_failed_queries", action = "store_true", dest = "discard_failedqueries", default = False, help = "discard hypotheses that have failed queries")
 # early cutoff: discard queries below the best k based only on entry point scores
-parser.add_option("-c", "--early_cutoff", action = "store", dest = "earlycutoff", type = "int", default = None, help = "discard queries below the best n based only on entry point scores")
+parser.add_option("-c", "--early_cutoff", action = "store", dest = "earlycutoff", type = "int", default = None, help = "discard hypotheses below the best n based only on entry point scores")
 # write logs?
 parser.add_option("-l", "--log", action = "store_true", dest = "log", default = False, help = "write log files to query directory")
+# rank-based cutoff
+parser.add_option("-r", "--rank_cutoff", action = "store", dest = "qs_cutoff", type = "int", default = 100, help = "discard hypotheses early if there are n others that have the same fillers for 3 of their query variables")
 
 
 (options, args) = parser.parse_args()
@@ -169,9 +175,9 @@ if options.isdir:
             print("SoIN", entry)
             out_filename = os.path.join(out_name, "seeds_" + entry)
             work(soin_filename, graph_dir = graph_name, out_filename= out_filename, maxnumseeds = options.maxnumseeds, log = options.log,
-                     discard_failedqueries = options.discard_failedqueries, earlycutoff = options.earlycutoff)
+                     discard_failedqueries = options.discard_failedqueries, earlycutoff = options.earlycutoff, qs_cutoff = options.qs_cutoff)
 else:
     # work on a single query
     print("SoIN", soin_name)
     work(soin_name, graph_filename = graph_name, out_filename = out_name, maxnumseeds = options.maxnumseeds, log = options.log,
-             discard_failedqueries = options.discard_failedqueries, earlycutoff = options.earlycutoff)
+             discard_failedqueries = options.discard_failedqueries, earlycutoff = options.earlycutoff, qs_cutoff = options.qs_cutoff)

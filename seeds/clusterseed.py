@@ -12,8 +12,7 @@ import math
 import itertools
 import functools
 import operator
-import numpy
-
+import scipy.stats
 
 from os.path import dirname, realpath
 src_path = dirname(dirname(realpath(__file__)))
@@ -508,18 +507,27 @@ class OneClusterSeed:
 class ClusterSeeds:
     # initialize with an AidaJson object and a statement of information need,
     # which is just a json object
-    def __init__(self, graph_obj, soin_obj, discard_failedqueries = False, earlycutoff = None):
+    def __init__(self, graph_obj, soin_obj, discard_failedqueries = False, earlycutoff = None, qs_cutoff = None):
         self.graph_obj = graph_obj
         self.soin_obj = soin_obj
 
+        # discard queries with any failed constraints?
         self.discard_failedqueries = discard_failedqueries
+        # cut off after N entry point combinations?
         self.earlycutoff = earlycutoff
-        
+        # cut off partially formed hypotheses during creation
+        # if there are at least QS_CUTOFF other hypothesis seeds
+        # with the same fillers for QS_COUNT_CUTOFF query variables?
+        self.QS_COUNT_CUTOFF = 3
+        self.QS_CUTOFF = qs_cutoff
+
+
         # parameters for ranking
         self.rank_first_k = 100
         self.bonus_for_novelty = -5
         self.consider_next_k_in_reranking = 10000
         self.num_bins = 5
+        
 
         # make seed clusters
         self.hypotheses = self._make_seeds()
@@ -539,28 +547,17 @@ class ClusterSeeds:
         
         hypotheses_for_export = [ h.finalize() for h in ranking ] #sorted(self.hypotheses, key = lambda h:h.hypothesis.lweight, reverse = True)]
         return AidaHypothesisCollection( hypotheses_for_export)
-        
+
+    #########################
+    #########################
+    # HYPOTHESIS SEED CREATION
+
     # create initial cluster seeds.
     # this is called from __init__
     def _make_seeds(self):
         # keep queue of hypotheses-in-making, list of finished hypotheses
         hypotheses_todo = deque()
         hypotheses_done = [ ]
-
-        # HIER
-        QS_COUNT_CUTOFF = 3
-        QS_CUTOFF = 100
-        qvar_signatures = { }
-        def make_one_signature(keys, qfdict):
-            return "_".join(k + "|" + qfdict[k][-5:] for k in sorted(keys))
-            
-        def make_qvar_signature(h):
-            if len(h.qvar_filler) - len(h.entrypoints) < QS_COUNT_CUTOFF:
-                return None
-            # return "_".join(k + "|" + v for k, v in sorted(h.qvar_filler.items()))
-            # return "_".join(k + "|" + v[-5:] for k, v in sorted(h.qvar_filler.items()))
-            qs_entry = make_one_signature(h.entrypoints, h.qvar_filler)
-            return [qs_entry + "_" + make_one_signature(keys, h.qvar_filler) for keys in itertools.combinations(sorted(k for k in h.qvar_filler.keys() if k not in h.entrypoints), 2)]
 
         # have we found any hypothesis without failed queries yet?
         # if so, we can eliminate all hypotheses with failed queries
@@ -594,27 +591,32 @@ class ClusterSeeds:
 
         ################
         print("Extending cluster seeds")
-        testindex = 0
+        printindex = 0
+        # signatures of query variables, for early cutoff
+        qvar_signatures = { }
+        
+        
         # extend all hypotheses in the deque until they are done
         while len(hypotheses_todo) > 0:
-            testindex += 1
-            if testindex % 500 == 0:
-                print("hypotheses to do", len(hypotheses_todo), "hypotheses done", len(hypotheses_done))
-                #input()
-            # if len(hypotheses_done) > 5000:
+            printindex += 1
+            if printindex % 500 == 0:
+                print("hypotheses done", len(hypotheses_done))
+                
+            # if len(hypotheses_done) > 5:
             #       break
             
             core_hyp = hypotheses_todo.popleft()
-            qs = make_qvar_signature(core_hyp)
-            if qs is not None:
-                if any(qvar_signatures.get(q1, 0) >= QS_CUTOFF for q1 in qs):
-                    # do not process this hypothesis further
-                    # print("skipping hypothesis", qs)
-                    continue
-                else:
-                    for q1 in qs:
-                        # print("HIER", q1, qvar_signatures.get(q1, 0))
-                        qvar_signatures[ q1] = qvar_signatures.get(q1, 0) + 1
+
+            if self.QS_CUTOFF is not None:
+                qs = self._make_qvar_signature(core_hyp)
+                if qs is not None:
+                    if any(qvar_signatures.get(q1, 0) >= self.QS_CUTOFF for q1 in qs):
+                        # do not process this hypothesis further
+                        # print("skipping hypothesis", qs)
+                        continue
+                    else:
+                        for q1 in qs:
+                            qvar_signatures[ q1] = qvar_signatures.get(q1, 0) + 1
 
             if self.discard_failedqueries:
                 # we are discarding hypotheses with failed queries
@@ -666,6 +668,24 @@ class ClusterSeeds:
         # at this point, all hypotheses are as big as they can be.
         return hypotheses_done
 
+    def _make_qvar_signature(self, h):
+        ##
+        def make_one_signature(keys, qfdict):
+            return "_".join(k + "|" + qfdict[k][-5:] for k in sorted(keys))
+        ##
+        
+        if len(h.qvar_filler) - len(h.entrypoints) < self.QS_COUNT_CUTOFF:
+            return None
+
+        # make string characterizing entry points
+        qs_entry = make_one_signature(h.entrypoints, h.qvar_filler)
+        # and concatenate with string characterizing other fillers
+        return [qs_entry + "_" + make_one_signature(keys, h.qvar_filler) for keys in itertools.combinations(sorted(k for k in h.qvar_filler.keys() if k not in h.entrypoints), 2)]
+    
+    #########################
+    #########################
+    # ENTRY POINT HANDLING
+    
     #################################
     # Return any combination of entry point fillers for all the entry points
     #
@@ -704,6 +724,9 @@ class ClusterSeeds:
         for qvar_filler, weight in sorted(zip(filler_index_tuples, weights), key = lambda pair:pair[1], reverse = True):
             yield (qvar_filler, weight)
         
+    #########################
+    #########################
+    # TEMPORAL ANALYSIS
     ##################################
     # given the "temporal" piece of a statement of information need,
     # turn the date and time info in the dictionary
@@ -723,106 +746,53 @@ class ClusterSeeds:
         return retv
 
     #########################
+    #########################
+    # RANKING
+    #########################
     # compute a weight for all cluster seeds in self.hypotheses
     def _rank_seeds(self):
-        ## qf_signatures = set()
-        ## for h in self.hypotheses:
-        ##     s = "___".join([ key + "_" + filler[-6:] for key, filler in sorted(h.qvar_filler.items())])
-        ##     if s in qf_signatures:
-        ##         print("duplicate signature")
-        ##     qf_signatures.add(s)
-                
-
-        ## input()
-        
-        # group seeds by their current weight,
+        # rank seeds by their current weight,
         # which depends on the goodness of their entry points
         # and on whether they missed any query constraints
         # this is a list of lists of hypotheses
-        hypothesis_groups = self._group_seed_byweight(self.hypotheses)
-        # print("HIER group sizes", [len(g) for g in hypothesis_groups])
-        #print("HIER first group weights", [h.lweight for h in hypothesis_groups[0]])
-        #print("HIER last group weights", [h.lweight for h in hypothesis_groups[-1]])
-        ## for g in hypothesis_groups:
-        ##     print("group weights", [h.lweight for h in g])
-        ##     print("duplicate weights?", [any(h.qvar_filler[v1] == h.qvar_filler[v2] for h in g for v1 in h.qvar_filler.keys() for v2 in h.qvar_filler.keys() if v1 != v2) for h in g])
-        
-        # initial ranking by connectedness, using the hypothesis groups
-        ranking= self._rank_seed_connectedness(hypothesis_groups)
+        ranking1 = self._rank_seed_byweight(self.hypotheses)
+        # print("ranking1", ranking1, [h.lweight for h in self.hypotheses])
 
+        # HIER
+        # initial ranking by connectedness, using the hypothesis groups
+        ranking2= self._rank_seed_connectedness(self.hypotheses)
+        # print("ranking 2", ranking2)
+        
+        # HIER interpolate rankings
+        ranking_interpolated = [ (ranking1[i] + ranking2[i])/2.0 for i in range(len(ranking1))]
+        # print("ranking interpolated", ranking_interpolated)
+
+        # sort hypotheses by interpolated rankings
+        hypotheses_sorted = [pair[1] for pair in sorted(enumerate(self.hypotheses), key = lambda pair:ranking_interpolated[pair[0]], reverse = True)]
+        
         # re-rank by diversity. we only care about the self.rank_first_k highest ranked items
-        ranking = self._rank_seed_novelty(ranking)
+        hypotheses_sorted = self._rank_seed_novelty(hypotheses_sorted)
 
         # ranking is a list of hypotheses from self.hypotheses, ranked
         # best first
-        return ranking
+        return hypotheses_sorted
 
-    # group hypotheses by their lweight,
+    # rank hypotheses by their lweight,
     # which indicates how good their entrypoints were,
     # and whether they failed to meet any query constraints
-    def _group_seed_byweight(self, hypotheses):
+    def _rank_seed_byweight(self, hypotheses):
         # sort hypotheses by weight, highest first
-        # but first make sure each hypothesis has a weight
-        for hyp in hypotheses:
-            if hyp.lweight is None:
-                # this should not happen, but just to make sure
-                hyp.lweight = 0.0
-                
-        hypotheses_sorted = sorted(hypotheses, key = lambda h: h.lweight, reverse = True)
-        hypothesis_weights = [h.lweight for h in hypotheses_sorted]
-
-        # make self.num_bins bins of weights
-        bin_sizes, dummy = numpy.histogram(hypothesis_weights, self.num_bins)
-
-        # print("HIER1", hypotheses_sorted, bin_sizes)
-        bins = [ ]
-        
-        lower_index = 0
-        for binsize in bin_sizes:
-            bins.append(hypotheses_sorted[ lower_index : lower_index + binsize] )
-            lower_index += binsize
-            
-
-        ## for ix, b in enumerate(bins):
-        ##     print("HIER bin", ix, [h.lweight for h in b])
-            
-        return bins
-        ## # make list of hypothesis weights
-        ## grouping = { }
-        ## for hyp in hypotheses:
-        ##     if hyp.lweight is None:
-        ##         # this should not happen, but just to make sure
-        ##         hyp.lweight = 0.0
-                
-        ##     if hyp.lweight not in grouping:
-        ##         grouping[hyp.lweight] = [ ]
-
-        ##     grouping[hyp.lweight].append(hyp)
-
-        ## return grouping
+        # return ranks
+        # highest to lowest, hence listlength-ranking
+        return (len(hypotheses) - scipy.stats.rankdata([h.lweight for h in hypotheses], method = "min")).astype(int)
+    
     
     # weighting based on connectedness of a cluster seed:
     # sum of degrees of EREs in the cluster.
     # this rewards both within-cluster and around-cluster connectedness
     # this does seed connectedness ratings for multiple groups of hypotheses,
     # where the grouping is a mapping from weight to group
-    def _rank_seed_connectedness(self, grouped_hypotheses):
-        ranking = [ ]
-        for group in grouped_hypotheses:
-            ranking += self._rank_seed_connectedness_forgroup(group)
-
-        # print("HIER ranking", [h.lweight for h in ranking])
-        return ranking
-    
-        ## ranking = [ ]
-        ## # sort groups by weight, highest weight first
-        ## for lweight, group in sorted(grouped_hypotheses.items(), reverse = True):
-        ##     ranking += self._rank_seed_connectedness_forgroup(group)
-
-        ## return ranking
-
-    #  do the actual work in connectedness ranking
-    def _rank_seed_connectedness_forgroup(self, hypotheses):
+    def _rank_seed_connectedness(self, hypotheses):
         weights = [ ]
 
         for hypothesis in hypotheses:
@@ -834,7 +804,9 @@ class ClusterSeeds:
                     outdeg += 1
             weights.append( outdeg)
 
-        return [ h for h, w in sorted(zip(hypotheses, weights), key = lambda hw:hw[1], reverse = True)]
+        # print("connectedness weights", weights)
+
+        return (len(hypotheses) - scipy.stats.rankdata(weights, method = "min")).astype(int)
 
     # given a list of pairs (ranking, OneClusterSeed object),
     # produce a new such list where objects are ranked more highly
