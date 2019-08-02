@@ -20,7 +20,7 @@ from seeds.hypothesisfilter import AidaHypothesisFilter
 #########################
 # class that manages cluster expansion
 class ClusterExpansion:
-    # initialize with an AidaJson object and a list of AidaHypothesis objects
+    # initialize with an AidaJson object and an AidaHypothesisCollection 
     def __init__(self, graph_obj, hypothesis_obj):
         self.graph_obj = graph_obj
         self.hypothesis_obj = hypothesis_obj

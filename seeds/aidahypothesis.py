@@ -57,6 +57,8 @@ class AidaHypothesis:
             self.stmt_weights[ stmtlabel ] = weight
         elif core:
             self.stmt_weights[stmtlabel ] = 0.0
+        else:
+            self.stmt_weights[stmtlabel] = self.default_weight
 
     def extend(self, stmtlabel, core = False, weight = None):
         if stmtlabel in self.stmts:
@@ -193,13 +195,31 @@ class AidaHypothesis:
     def to_s(self):
         retv = ""
 
-        retv += ", ".join(self.stmts) + "\n\n"
+        retv += ", ".join(sorted(self.stmts, key = lambda s:self.stmt_weights[s], reverse = True)) + "\n\n"
+
+        # start with core statements
+        core = self.core_eres()
+        for ere_id in core:
+            if self.graph_obj.is_event(ere_id) or self.graph_obj.is_relation(ere_id):
+                retv += self.ere_to_s(ere_id) + "\n"
+                
+        # make output for each event or relation in the hypothesis
+        for ere_id in self.eres():
+            if ere_id in core:
+                # already done
+                continue
+            
+            if self.graph_obj.is_event(ere_id):
+                retv += self.ere_to_s(ere_id) + "\n"
 
         # make output for each event or relation in the hypothesis
         for ere_id in self.eres():
-            if self.graph_obj.is_event(ere_id) or self.graph_obj.is_relation(ere_id):
+            if ere_id in core:
+                # already done
+                continue
+            if self.graph_obj.is_relation(ere_id):
                 retv += self.ere_to_s(ere_id) + "\n"
-                        
+
         return retv
 
     # String for a statement
@@ -234,6 +254,11 @@ class AidaHypothesis:
         return list(set(nodelabel for stmtlabel in self.stmts for nodelabel in self.graph_obj.statement_args(stmtlabel) \
                         if self.graph_obj.is_ere(nodelabel)))
 
+    # list of EREs adjacent to core statements of this hypothesis
+    def core_eres(self):
+        return list(set(nodelabel for stmtlabel in self.core_stmts for nodelabel in self.graph_obj.statement_args(stmtlabel) \
+                        if self.graph_obj.is_ere(nodelabel)))
+                        
     def eres_of_stmt(self, stmtlabel):
         if stmtlabel not in self.stmts:
             return [ ]
@@ -313,7 +338,11 @@ class AidaHypothesis:
         names = self.entity_names(ere_id)
         if names is None or names == [ ]:
             return "[unknown]"
-        return min(names, key = lambda n: len(n))
+        english_names = self.graph_obj.english_names(names)
+        if len(english_names) > 0:
+            return min(english_names, key = lambda n:len(n))
+        else:
+            return min(names, key = lambda n: len(n))
 
 
     # possible affiliations of an ERE:

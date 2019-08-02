@@ -22,6 +22,7 @@ from  aif import AidaJson
 
 from seeds.aidahypothesis import AidaHypothesis, AidaHypothesisCollection
 from seeds.hypothesisfilter import AidaHypothesisFilter
+from seeds.clusterextend import ClusterExpansion
 
 #########################
 # read graph file and hypothesis file
@@ -38,6 +39,11 @@ with open(hypothesis_filename, 'r') as fin:
 
 # make the filter
 filter_obj = AidaHypothesisFilter(graph_obj)
+
+
+expansion_obj = ClusterExpansion(graph_obj, hypothesis_collection)
+expansion_obj.type_completion()
+expansion_obj.affiliation_completion()
 
 new_hypothesis_collection = AidaHypothesisCollection( [])
 

@@ -19,7 +19,11 @@ class AidaHypothesisFilter:
 
     ##############################################################
     # Tests
-    # They take in a hypothesis and the statement (which is part of the hypothesis) to test.
+    # They take in a hypothesis-under-construction, the statement (which is part of the hypothesis) to test,
+    # and the full hypothesis (if that is available).
+    #
+    # Some filters only work post-hoc, namely the ones that make use of the full hypothesis.
+    #
     # They return False if there is a problem, and True otherwise
     # Assumed invariant: the hypothesis is error-free except for possibly this statement.
     # (This can be achieved by filtering as each new statement is added)
@@ -33,7 +37,9 @@ class AidaHypothesisFilter:
     ## # Entities that are possible affiliates of any affiliation relation
     ## # are counted as their own affiliates.
     ## # For example, Ukraine counts as being affiliated with Ukraine.
-    def event_attack_attacker_instrument_compatible(self, hypothesis, test_stmt):
+    #
+    # This filter does not use the full hypothesis, and hence can be used during hypothesis construction
+    def event_attack_attacker_instrument_compatible(self, hypothesis, test_stmt, fullhypothesis):
 
         # is stmt an event role of a conflict.attack event, specifically an attacker or instrument?
         if not self.graph_obj.is_eventrole_stmt(test_stmt):
@@ -71,8 +77,10 @@ class AidaHypothesisFilter:
 
     #######
     #
-    # Don't have multiple types on an event or relation
-    def single_type_per_eventrel(self, hypothesis, test_stmt):
+    # Don't have multiple types on an event or relation.
+    #
+    # This filter takes the full hypothesis into account and hence only works post-hoc.
+    def single_type_per_eventrel(self, hypothesis, test_stmt, fullhypothesis):
         # potential problem only if this is a type statement
         if not self.graph_obj.is_typestmt(test_stmt):
             return True
@@ -85,31 +93,59 @@ class AidaHypothesisFilter:
 
         # okay, we have an event or relation.
         # check whether this ere has another type
-        types = [type_ere for type_ere in hypothesis.ere_each_type(ere)]
+        types = [typelabel for typelabel in hypothesis.ere_each_type(ere)]
         if len(types) > 1:
-            # print("HIER1 flagging type stmt", test_stmt, types)
+            # print("more than one type statement, flagging", test_stmt, self.graph_obj.stmt_object(test_stmt), types)
+            return False
+
+        # this is an only type. Check to see whether it coincides with any roles of this event or relation
+        # IN THE FULL HYPOTHESIS (this is the part that only works post-hoc)
+        eventrel_roles_ere = [ self.graph_obj.shorten_label(rolelabel) for rolelabel, arg in fullhypothesis.eventrelation_each_argument(ere) ]
+        typelabel = self.graph_obj.shorten_label(self.graph_obj.stmt_object(test_stmt))
+        if not(any(rolelabel.startswith(typelabel) and len(rolelabel) > len(typelabel) for rolelabel in eventrel_roles_ere)):
+            # no, this type label does not coincide with any role label
+            # print("type statement not matching any role, flagging", test_stmt, self.graph_obj.stmt_object(test_stmt), eventrel_roles_ere)
             return False
 
         return True
         
     #######
     #
-    # Don't have multiple affiliations of the exact same subtype for the same ERE
-    # NOT FINISHED
+    # Don't have relations with only one argument.
+    #
+    # This filter takes the full hypothesis into account and hence only works post-hoc.
+    def relations_need_twoargs(self, hypothesis, test_stmt, fullhypothesis):
+        # is this an argument of a relation
+        if not(self.graph_obj.is_relation(self.graph_obj.stmt_subject(test_stmt)) and self.graph_obj.is_ere(self.graph_obj.stmt_object(test_stmt))):
+            # no: then we don't have a problem
+            return True
+
+        rel_ere = self.graph_obj.stmt_subject(test_stmt)
+
+        # check if this relation ERE has more than one argument IN THE FULL HYPOTHESIS (this is the part
+        # that only works post-hoc)
+        rel_roles = set(rolelabel for rolelabel, arg in fullhypothesis.eventrelation_each_argument(rel_ere))
+        if len(rel_roles) > 1:
+            # print("keeping arg of role", rel_ere, rel_roles)
+            return True
+
+        # this is the only argument of this relation. don't add it
+        return False
     
     ##########################################
     # main checking function
     # check one single statement, which is part of the hypothesis.
     # assumption: this statement is the only potentially broken statement in the hypothesis
-    def validate(self, hypothesis, stmt):
+    def validate(self, hypothesis, stmt, fullhypothesis):
 
         tests = [
             self.event_attack_attacker_instrument_compatible,
-            self.single_type_per_eventrel
+            self.single_type_per_eventrel,
+            self.relations_need_twoargs
             ]
 
         for test_okay in tests:
-            if not test_okay(hypothesis, stmt):
+            if not test_okay(hypothesis, stmt, fullhypothesis):
                 return False
                 
         return True
@@ -131,6 +167,8 @@ class AidaHypothesisFilter:
         incr_hypothesis.add_qvar_filler(hypothesis.qvar_filler)
         incr_hypothesis_eres = set(incr_hypothesis.eres())
 
+        # print("HIER0", sorted(incr_hypothesis.stmts))
+
         # all other statements are candidates, sorted by their weights in the hypothesis, highest first
         candidates = [ stmt for stmt in hypothesis.stmts if stmt not in hypothesis.core_stmts]
         candidates.sort(key = lambda stmt:hypothesis.stmt_weights[stmt], reverse = True)
@@ -139,41 +177,62 @@ class AidaHypothesisFilter:
         # candidates are set aside if they currently don't connect to any ERE in the incremental hypothesis
         candidates_set_aside = deque()
 
-        def test_and_insert_candidate(stmt):
-            testhypothesis = incr_hypothesis.extend(stmt, weight = hypothesis.stmt_weights[stmt])
-            
-            if self.validate(testhypothesis, stmt):
-                # yes, statement is fine. add the statement's EREs to the incremental EREs
-                for nodelabel in [ self.graph_obj.stmt_subject(stmt), self.graph_obj.stmt_object(stmt) ]:
-                    if self.graph_obj.is_ere(nodelabel):
-                        incr_hypothesis_eres.add(nodelabel)
-                # retain the extended hypothesis
-                return testhypothesis
-            else:
-                # don't add stmt after all
-                return incr_hypothesis
-        
-        def check_candidates_set_aside():
-            for stmt in candidates_set_aside:
-                if self.graph_obj.stmt_subject(stmt) in incr_hypothesis_eres or self.graph_obj.stmt_object(stmt) in incr_hypothesis_eres:
-                    # yes, check now whether this candidate should be inserted
-                    candidates_set_aside.remove( stmt)
-                    incr_hypothesis = test_and_insert_candidate(stmt)
-            
-
         while len(candidates) > 0:
+            ##
             # any set-aside candidates that turn out to be connected to the hypothesis after all?
-            check_candidates_set_aside()
+            resurrected_stmts = [ ]
+            for stmt in candidates_set_aside:
+                if any(ere in incr_hypothesis_eres for ere in self.graph_obj.statement_args(stmt)):
+                    # yes, check now whether this candidate should be inserted
+                    # print("resurrecting", stmt)
+                    resurrected_stmts.append(stmt)
+                    incr_hypothesis, new_eres = self._test_and_insert_candidate(stmt, incr_hypothesis, hypothesis)
+                    incr_hypothesis_eres.update(new_eres)
+                    # print("HIER2", sorted(incr_hypothesis.stmts))
+            for stmt in resurrected_stmts: candidates_set_aside.remove ( stmt )
 
             # now test the next non-set-aside candidate
             stmt = candidates.popleft()
-            incr_hypothesis = test_and_insert_candidate(stmt)
+            # does it need to be set aside?
+            if not(self.graph_obj.stmt_subject(stmt) in incr_hypothesis_eres) and not(self.graph_obj.stmt_object(stmt) in incr_hypothesis_eres):
+                # print("setting aside", stmt)
+                candidates_set_aside.append(stmt)
+            else:
+                # no, we can test this one now.
+                incr_hypothesis, new_eres = self._test_and_insert_candidate(stmt, incr_hypothesis, hypothesis)
+                incr_hypothesis_eres.update(new_eres)
+
+            # print("HIER", sorted(incr_hypothesis.stmts))
 
         # no candidates left in the candidate set, but maybe something from the set-aside candidate list
         # has become connected to the core by the last candidate to be added
-        check_candidates_set_aside()
+        for stmt in candidates_set_aside:
+            if any(ere in incr_hypothesis_eres for ere in self.graph_obj.statement_args(stmt)):
+                # yes, check now whether this candidate should be inserted
+                # print("resurrecting", stmt)
+                incr_hypothesis, new_eres = self._test_and_insert_candidate(stmt, incr_hypothesis, hypothesis)
+                incr_hypothesis_eres.update(new_eres)
+                # print("HIER2", sorted(hypothesis.stmts))        
 
         return incr_hypothesis
+        
+
+
+    def _test_and_insert_candidate(self, stmt, prev_hypothesis, full_hypothesis):
+        testhypothesis = prev_hypothesis.extend(stmt, weight = full_hypothesis.stmt_weights[stmt])
+
+        new_eres = set()
+        if self.validate(testhypothesis, stmt, full_hypothesis):
+            # yes, statement is fine. add the statement's EREs to the incremental EREs
+            # print("keeping stmt", stmt)
+            for nodelabel in [ self.graph_obj.stmt_subject(stmt), self.graph_obj.stmt_object(stmt) ]:
+                if self.graph_obj.is_ere(nodelabel):
+                    new_eres.add(nodelabel)
+                # retain the extended hypothesis
+                return (testhypothesis, new_eres)
+        else:
+            # don't add stmt after all
+            return (prev_hypothesis, new_eres)
         
 
     #######3
