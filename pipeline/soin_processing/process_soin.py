@@ -180,8 +180,12 @@ def check_descriptor(graph, typing_statement, typed_descriptor):
             return False
         return typed_descriptor.descriptor.evaluate_node(justification_node, bounding_box_node)
 
-    elif isinstance(typed_descriptor, VideoDescriptor):
-        pass
+    elif typed_descriptor.descriptor.descriptor_type == "Video":
+        justification_node = get_justification_node(graph, typing_statement)
+        bounding_box_node = get_bounding_box_node(graph, justification_node)
+        if not (justification_node and bounding_box_node):
+            return False
+        return typed_descriptor.descriptor.evaluate_node(justification_node, bounding_box_node)
 
     elif typed_descriptor.descriptor.descriptor_type == "KB":
         link_node = get_kb_link_node(graph, typing_statement)
@@ -267,7 +271,7 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
                 print()
                 print("##############################################")
                 print()
-                if (total_score > DEBUG_SCORE_FLOOR):
+                if (total_score >= DEBUG_SCORE_FLOOR):
                     input()
 
             subject_address = next(iter(node.get('subject')))
