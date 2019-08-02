@@ -132,6 +132,28 @@ class AidaHypothesisFilter:
         # this is the only argument of this relation. don't add it
         return False
     
+    #######
+    #
+    # Don't have events with only one argument.
+    #
+    # This filter takes the full hypothesis into account and hence only works post-hoc.
+    def events_need_twoargs(self, hypothesis, test_stmt, fullhypothesis):
+        # is this an argument of a relation
+        if not(self.graph_obj.is_event(self.graph_obj.stmt_subject(test_stmt)) and self.graph_obj.is_ere(self.graph_obj.stmt_object(test_stmt))):
+            # no: then we don't have a problem
+            return True
+
+        event_ere = self.graph_obj.stmt_subject(test_stmt)
+
+        # check if this event ERE has more than one argument IN THE FULL HYPOTHESIS (this is the part
+        # that only works post-hoc)
+        event_roles = set(rolelabel for rolelabel, arg in fullhypothesis.eventrelation_each_argument(event_ere))
+        if len(event_roles) > 1:
+            return True
+
+        # this is the only argument of this relation. don't add it
+        return False
+    
     ##########################################
     # main checking function
     # check one single statement, which is part of the hypothesis.
@@ -141,7 +163,8 @@ class AidaHypothesisFilter:
         tests = [
             self.event_attack_attacker_instrument_compatible,
             self.single_type_per_eventrel,
-            self.relations_need_twoargs
+            self.relations_need_twoargs,
+            self.events_need_twoargs
             ]
 
         for test_okay in tests:
