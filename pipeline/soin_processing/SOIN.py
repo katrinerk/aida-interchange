@@ -428,6 +428,7 @@ def process_xml(in_path):
 
                                 else:
                                     _LOG.log(50, 'Process SOIN: Unexpected tag {} encountered'.format(descriptor.tag))
+                                    print(descriptor.tag)
                                     raise UnexpectedXMLTag
                                 this_td = TypedDescriptor(**typed_descriptor_dict)
                             ep_dict['typed_descriptor_list'].append(TypedDescriptor(**typed_descriptor_dict))

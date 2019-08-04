@@ -1,7 +1,7 @@
 #  Toggles debug mode; debug mode prints large amounts of scoring information and pauses for review when a node
 #  scores above a threshold specified in DEBUG_SCORE_FLOOR
-DEBUG = False
-DEBUG_SCORE_FLOOR = 50  # The minimum score required to trigger a pause in debug mode
+DEBUG = True
+DEBUG_SCORE_FLOOR = 90  # The minimum score required to trigger a pause in debug mode
 
 #  The weights for each type of score
 SCORE_WEIGHTS = {

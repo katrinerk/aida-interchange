@@ -27,6 +27,7 @@ import itertools
 from copy import deepcopy
 
 graph_path = '/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R107'
+graph_path = '/Users/eholgate/Downloads/GAIA_1-OPERA_3_Colorado_1/NIST/'
 
 
 def load_graph(in_dir):
@@ -154,7 +155,8 @@ def get_bounding_box_node(graph, justification_node):
     bounding_box_id_set = justification_node.get('boundingBox')
     if not bounding_box_id_set:
         return False
-    bounding_box_node = graph.get(next(iter(bounding_box_id_set)))
+    print(bounding_box_id_set)
+    bounding_box_node = graph.get_node(next(iter(bounding_box_id_set)))
     if not bounding_box_node:
         return False
     return bounding_box_node
@@ -165,6 +167,13 @@ def check_descriptor(graph, typing_statement, typed_descriptor):
         justification_node = get_justification_node(graph, typing_statement)
         if not justification_node:
             return False
+        jtype_set = justification_node.get('type', shorten=True)
+        if not jtype_set:
+            return False
+        jtype = next(iter(jtype_set))
+        if jtype != "TextJustification":
+            return False
+
         return typed_descriptor.descriptor.evaluate_node(justification_node)
 
     elif typed_descriptor.descriptor.descriptor_type == "String":
@@ -175,16 +184,40 @@ def check_descriptor(graph, typing_statement, typed_descriptor):
 
     elif typed_descriptor.descriptor.descriptor_type == "Image":
         justification_node = get_justification_node(graph, typing_statement)
+        if not justification_node:
+            return False
+        jtype_set = justification_node.get('type', shorten=True)
+        if not jtype_set:
+            return False
+        jtype = next(iter(jtype_set))
+        if jtype != "ImageJustification":
+            return False
+
         bounding_box_node = get_bounding_box_node(graph, justification_node)
+        if not bounding_box_node:
+            return False
         if not (justification_node and bounding_box_node):
             return False
+
         return typed_descriptor.descriptor.evaluate_node(justification_node, bounding_box_node)
 
     elif typed_descriptor.descriptor.descriptor_type == "Video":
         justification_node = get_justification_node(graph, typing_statement)
-        bounding_box_node = get_bounding_box_node(graph, justification_node)
-        if not (justification_node and bounding_box_node):
+        if not justification_node:
             return False
+
+        jtype_set = justification_node.get('type', shorten=True)
+        if not jtype_set:
+            return False
+
+        jtype = next(iter(jtype_set))
+        if jtype != "KeyFrameVideoJustification":
+            return False
+
+        bounding_box_node = get_bounding_box_node(graph, justification_node)
+        if not bounding_box_node:
+            return False
+
         return typed_descriptor.descriptor.evaluate_node(justification_node, bounding_box_node)
 
     elif typed_descriptor.descriptor.descriptor_type == "KB":
@@ -275,7 +308,10 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
                     input()
 
             subject_address = next(iter(node.get('subject')))
-            prototype = cluster_to_prototype[entity_to_cluster[subject_address]]
+            try:
+                prototype = cluster_to_prototype[entity_to_cluster[subject_address]]
+            except KeyError:
+                continue
 
             if total_score in results:
                 results[total_score].add((total_score, prototype))

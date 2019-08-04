@@ -31,49 +31,55 @@ def compute_string_overlap(observed, target):
 
 def compute_bounding_box_overlap(observed, target):
     # Check to see if there is overlap
-    # Check horizontal
-    if observed['topleft'][0] > target['bottomright'][0] or target['topleft'][0] > observed['bottomright'][0]:
-        return 0
-    # Check vertical
-    if observed['topleft'][1] < target['bottomright'][1] or target['topleft'][1] < observed['bottomright'][1]:
+    overlap = True
+    if int(target['bottomright'][1]) <= int(observed['topleft'][1]):
+        overlap = False
+    if int(target['bottomright'][0]) <= int(observed['topleft'][0]):
+        overlap = False
+    if int(target['topleft'][1]) >= int(observed['bottomright'][1]):
+        overlap = False
+    if int(target['topleft'][0]) >= int(observed['bottomright'][0]):
+        overlap = False
+
+    if not overlap:
         return 0
 
-    #### This handles if they intersect
-    observed_l = observed['bottomright'][0] - observed['topleft'][0]
-    observed_w = observed['bottomright'][1] - observed['topleft'][1]
+    #  This handles if they intersect
+    observed_l = int(observed['bottomright'][0]) - int(observed['topleft'][0])
+    observed_w = int(observed['bottomright'][1]) - int(observed['topleft'][1])
     area_observed = observed_l * observed_w
 
-    target_l = target['bottomright'][0] - target['topleft'][0]
-    target_w = target['bottomright'][1] - target['topleft'][1]
+    target_l = int(target['bottomright'][0]) - int(target['topleft'][0])
+    target_w = int(target['bottomright'][1]) - int(target['topleft'][1])
     area_target = target_l * target_w
 
     overlap_coords = {
         'topleft_x': None,
         'topleft_y': None,
-        'bottompright_x': None,
+        'bottomright_x': None,
         'bottomright_y': None
     }
 
     # Determine the coordinates of the overlapping region
-    if observed['topleft'][0] <= target['topleft'][0]:
-        overlap_coords['topleft_x'] = target['topleft'][0]
+    if int(observed['topleft'][0]) <= int(target['topleft'][0]):
+        overlap_coords['topleft_x'] = int(target['topleft'][0])
     else:
-        overlap_coords['topleft_x'] = observed['topleft'][0]
+        overlap_coords['topleft_x'] = int(observed['topleft'][0])
 
-    if observed['topleft'][1] <= target['topleft'][1]:
-        overlap_coords['topleft_y'] = target['topleft'][1]
+    if int(observed['topleft'][1]) <= int(target['topleft'][1]):
+        overlap_coords['topleft_y'] = int(target['topleft'][1])
     else:
-        overlap_coords['topleft_y'] = observed['topleft'][0]
+        overlap_coords['topleft_y'] = int(observed['topleft'][0])
 
-    if observed['bottomright'][0] <= target['bottomright'][0]:
-        overlap_coords['bottomright_x'] = observed['bottomright'][0]
+    if int(observed['bottomright'][0]) <= int(target['bottomright'][0]):
+        overlap_coords['bottomright_x'] = int(observed['bottomright'][0])
     else:
-        overlap_coords['bottomright_x'] = target['bottomright'][0]
+        overlap_coords['bottomright_x'] = int(target['bottomright'][0])
 
-    if observed['bottomright'][1] <= target['bottomright'][1]:
-        overlap_coords['bottomright_y'] = observed['bottomright'][1]
+    if int(observed['bottomright'][1]) <= int(target['bottomright'][1]):
+        overlap_coords['bottomright_y'] = int(observed['bottomright'][1])
     else:
-        overlap_coords['bottomright_y'] = target['bottomright'][1]
+        overlap_coords['bottomright_y'] = int(target['bottomright'][1])
 
     overlap_l = overlap_coords['bottomright_x'] - overlap_coords['topleft_x']
     overlap_w = overlap_coords['bottomright_y'] - overlap_coords['topleft_y']
@@ -82,7 +88,7 @@ def compute_bounding_box_overlap(observed, target):
     overlap_target = area_overlap / area_target
     overlap_observed = area_overlap / area_observed
 
-    return (overlap_target + overlap_observed)/2
+    return ((overlap_target + overlap_observed)/2)*100
 
 
 class TypedDescriptor:
@@ -281,8 +287,9 @@ class StringDescriptor:
 
 
 class VideoDescriptor:
-    def __init__(self, keyframe_id, top_left, bottom_right):
+    def __init__(self, doceid, keyframe_id, top_left, bottom_right):
         self.descriptor_type = "Video"
+        self.doceid = doceid
         self.keyframe_id = keyframe_id
         self.top_left = top_left
         self.bottom_right = bottom_right
@@ -302,13 +309,27 @@ class VideoDescriptor:
     def evaluate_node(self, justification_node, bounding_box_node):
         score = 0
 
-        # TODO: Verify field name
-        keyframe = next(iter(justification_source_set)).value.strip()
+        source_set = justification_node.get('source')
+        if not source_set:
+            return 0
+
+        source = next(iter(source_set)).strip()
+
+        if source == self.doceid:
+            score += 10
+        else:
+            return 0
+
+        keyframe_set = justification_node.get('keyFrame')
+        if not keyframe_set:
+            return score
+
+        keyframe = next(iter(keyframe_set)).strip()
         if keyframe == self.keyframe_id:
             score += 10
 
         if not bounding_box_node:
-            return score/100
+            return score
 
         bb_upper_left_x = str(next(iter(bounding_box_node.get('boundingBoxUpperLeftX'))).value).strip()
         bb_upper_left_y = str(next(iter(bounding_box_node.get('boundingBoxUpperLeftY'))).value).strip()
@@ -327,10 +348,16 @@ class VideoDescriptor:
             'bottomright': [lower_right_x, lower_right_y]
         }
 
-        window_score = compute_bounding_box_overlap(observed, target) * .9
+        window_score = compute_bounding_box_overlap(observed, target) * .8
         score += window_score
 
-        return score/100
+        if DEBUG:
+            print("Video Score: " + str(score))
+            print("Window Score: " + str(window_score))
+            justification_node.prettyprint()
+            bounding_box_node.prettyprint()
+
+        return score
 
 class ImageDescriptor:
     def __init__(self, doceid, top_left, bottom_right):
@@ -354,14 +381,19 @@ class ImageDescriptor:
         score = 0
         justification_source_set = justification_node.get('source')
         if not justification_source_set:
+            if DEBUG:
+                justification_node.prettyprint()
+                bounding_box_node.prettyprint()
             return 0
 
         justification_source = next(iter(justification_source_set)).value.strip()
-        if justification_source == self.doceid:
+        if justification_source.strip() == self.doceid.strip():
             score += 10
+        else:
+            return 0
 
         if not bounding_box_node:
-            return score/100
+            return score
 
         bb_upper_left_x = str(next(iter(bounding_box_node.get('boundingBoxUpperLeftX'))).value).strip()
         bb_upper_left_y = str(next(iter(bounding_box_node.get('boundingBoxUpperLeftY'))).value).strip()
@@ -381,9 +413,18 @@ class ImageDescriptor:
         }
 
         window_score = compute_bounding_box_overlap(observed, target) * .9
+
         score += window_score
 
-        return score/100
+
+
+        if DEBUG:
+            print("Image Score: " + str(score))
+            print("Window Score: " + str(window_score))
+            justification_node.prettyprint()
+            bounding_box_node.prettyprint()
+
+        return score
 
 
 class KBDescriptor:
