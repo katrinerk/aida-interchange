@@ -39,7 +39,7 @@ class AidaHypothesisFilter:
     ## # For example, Ukraine counts as being affiliated with Ukraine.
     #
     # This filter does not use the full hypothesis, and hence can be used during hypothesis construction
-    def event_attack_attacker_instrument_compatible(self, hypothesis, test_stmt, fullhypothesis):
+    def event_attack_attacker_instrument_compatible(self, hypothesis, test_stmt, fullhypothesis = None):
 
         # is stmt an event role of a conflict.attack event, specifically an attacker or instrument?
         if not self.graph_obj.is_eventrole_stmt(test_stmt):
@@ -75,6 +75,28 @@ class AidaHypothesisFilter:
         # no problem here
         return True
 
+    #######
+    #
+    ## All roles of an attack event need to be filled by different fillers
+    # (so, no attacking yourself)
+    #
+    # This filter does not use the full hypothesis, and hence can be used during hypothesis construction
+    def event_attack_all_roles_different(self, hypothesis, test_stmt, fullhypothesis = None):
+        # is stmt an event role of a conflict.attack event, specifically an attacker or instrument?
+        if not self.graph_obj.is_eventrole_stmt(test_stmt):
+            return True
+        if not self.graph_obj.stmt_predicate(test_stmt).startswith("Conflict.Attack"):
+            return True
+
+        event_ere = self.graph_obj.stmt_subject(test_stmt)
+        arg_ere = self.graph_obj.stmt_object(test_stmt)
+
+        if any(self.graph_obj.stmt_object(stmt) == arg_ere for stmt in self.graph_obj.each_ere_adjacent_stmt_anyrel(event_ere) if stmt != test_stmt):
+            print("two attack roles filled by same argument, discarding", test_stmt)
+            return False
+
+        return True
+        
     #######
     #
     # Don't have multiple types on an event or relation.
@@ -134,7 +156,8 @@ class AidaHypothesisFilter:
     
     #######
     #
-    # Don't have events with only one argument.
+    # Don't have events with only one argument, except when they are core EREs (that is, adjacent to
+    # one of the core statements)
     #
     # This filter takes the full hypothesis into account and hence only works post-hoc.
     def events_need_twoargs(self, hypothesis, test_stmt, fullhypothesis):
@@ -144,6 +167,12 @@ class AidaHypothesisFilter:
             return True
 
         event_ere = self.graph_obj.stmt_subject(test_stmt)
+        arg_ere = self.graph_obj.stmt_object(test_stmt)
+
+        if arg_ere in hypothesis.core_eres():
+            # then it's fine, keep the one-argument event
+            print("keeping one-argument event, as the argument is a core ERE", test_stmt)
+            return True
 
         # check if this event ERE has more than one argument IN THE FULL HYPOTHESIS (this is the part
         # that only works post-hoc)
@@ -158,18 +187,33 @@ class AidaHypothesisFilter:
     # main checking function
     # check one single statement, which is part of the hypothesis.
     # assumption: this statement is the only potentially broken statement in the hypothesis
-    def validate(self, hypothesis, stmt, fullhypothesis):
+    def validate(self, hypothesis, stmt, fullhypothesis = None):
 
-        tests = [
-            self.event_attack_attacker_instrument_compatible,
-            self.single_type_per_eventrel,
-            self.relations_need_twoargs,
-            self.events_need_twoargs
-            ]
+        if fullhypothesis is None:
+            # interactive filtering, only use tests usable for that
+            print("interactive filtering")
+            tests = [
+                self.event_attack_attacker_instrument_compatible,
+                self.event_attack_all_roles_different
+                ]
 
-        for test_okay in tests:
-            if not test_okay(hypothesis, stmt, fullhypothesis):
-                return False
+            for test_okay in tests:
+                if not test_okay(hypothesis, stmt):
+                    return False
+
+        else:
+            print("posthoc filtering")
+            tests = [
+                self.event_attack_attacker_instrument_compatible,
+                self.event_attack_all_roles_different,
+                self.single_type_per_eventrel,
+                self.relations_need_twoargs,
+                self.events_need_twoargs
+                ]
+
+            for test_okay in tests:
+                if not test_okay(hypothesis, stmt, fullhypothesis):
+                    return False
                 
         return True
 
