@@ -92,7 +92,7 @@ class AidaHypothesisFilter:
         arg_ere = self.graph_obj.stmt_object(test_stmt)
 
         if any(self.graph_obj.stmt_object(stmt) == arg_ere for stmt in self.graph_obj.each_ere_adjacent_stmt_anyrel(event_ere) if stmt != test_stmt):
-            print("two attack roles filled by same argument, discarding", test_stmt)
+            # print("two attack roles filled by same argument, discarding", test_stmt)
             return False
 
         return True
@@ -171,7 +171,7 @@ class AidaHypothesisFilter:
 
         if arg_ere in hypothesis.core_eres():
             # then it's fine, keep the one-argument event
-            print("keeping one-argument event, as the argument is a core ERE", test_stmt)
+            # print("keeping one-argument event, as the argument is a core ERE", test_stmt)
             return True
 
         # check if this event ERE has more than one argument IN THE FULL HYPOTHESIS (this is the part
@@ -191,7 +191,7 @@ class AidaHypothesisFilter:
 
         if fullhypothesis is None:
             # interactive filtering, only use tests usable for that
-            print("interactive filtering")
+            # print("interactive filtering")
             tests = [
                 self.event_attack_attacker_instrument_compatible,
                 self.event_attack_all_roles_different
@@ -202,7 +202,7 @@ class AidaHypothesisFilter:
                     return False
 
         else:
-            print("posthoc filtering")
+            # print("posthoc filtering")
             tests = [
                 self.event_attack_attacker_instrument_compatible,
                 self.event_attack_all_roles_different,
