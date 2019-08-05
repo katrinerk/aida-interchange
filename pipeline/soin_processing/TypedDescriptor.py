@@ -70,7 +70,7 @@ def compute_bounding_box_overlap(observed, target):
     if int(observed['topleft'][1]) <= int(target['topleft'][1]):
         overlap_coords['topleft_y'] = int(target['topleft'][1])
     else:
-        overlap_coords['topleft_y'] = int(observed['topleft'][0])
+        overlap_coords['topleft_y'] = int(observed['topleft'][1])
 
     if int(observed['bottomright'][0]) <= int(target['bottomright'][0]):
         overlap_coords['bottomright_x'] = int(observed['bottomright'][0])
