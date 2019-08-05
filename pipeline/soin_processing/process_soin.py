@@ -27,6 +27,7 @@ import itertools
 from copy import deepcopy
 
 graph_path = '/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R107'
+graph_path = '/Users/eholgate/Downloads/GAIA_1-OPERA_3_Colorado_1/NIST/'
 
 
 def load_graph(in_dir):
@@ -154,7 +155,8 @@ def get_bounding_box_node(graph, justification_node):
     bounding_box_id_set = justification_node.get('boundingBox')
     if not bounding_box_id_set:
         return False
-    bounding_box_node = graph.get(next(iter(bounding_box_id_set)))
+    print(bounding_box_id_set)
+    bounding_box_node = graph.get_node(next(iter(bounding_box_id_set)))
     if not bounding_box_node:
         return False
     return bounding_box_node
@@ -165,6 +167,13 @@ def check_descriptor(graph, typing_statement, typed_descriptor):
         justification_node = get_justification_node(graph, typing_statement)
         if not justification_node:
             return False
+        jtype_set = justification_node.get('type', shorten=True)
+        if not jtype_set:
+            return False
+        jtype = next(iter(jtype_set))
+        if jtype != "TextJustification":
+            return False
+
         return typed_descriptor.descriptor.evaluate_node(justification_node)
 
     elif typed_descriptor.descriptor.descriptor_type == "String":
@@ -175,16 +184,40 @@ def check_descriptor(graph, typing_statement, typed_descriptor):
 
     elif typed_descriptor.descriptor.descriptor_type == "Image":
         justification_node = get_justification_node(graph, typing_statement)
+        if not justification_node:
+            return False
+        jtype_set = justification_node.get('type', shorten=True)
+        if not jtype_set:
+            return False
+        jtype = next(iter(jtype_set))
+        if jtype != "ImageJustification":
+            return False
+
         bounding_box_node = get_bounding_box_node(graph, justification_node)
+        if not bounding_box_node:
+            return False
         if not (justification_node and bounding_box_node):
             return False
+
         return typed_descriptor.descriptor.evaluate_node(justification_node, bounding_box_node)
 
     elif typed_descriptor.descriptor.descriptor_type == "Video":
         justification_node = get_justification_node(graph, typing_statement)
-        bounding_box_node = get_bounding_box_node(graph, justification_node)
-        if not (justification_node and bounding_box_node):
+        if not justification_node:
             return False
+
+        jtype_set = justification_node.get('type', shorten=True)
+        if not jtype_set:
+            return False
+
+        jtype = next(iter(jtype_set))
+        if jtype != "KeyFrameVideoJustification":
+            return False
+
+        bounding_box_node = get_bounding_box_node(graph, justification_node)
+        if not bounding_box_node:
+            return False
+
         return typed_descriptor.descriptor.evaluate_node(justification_node, bounding_box_node)
 
     elif typed_descriptor.descriptor.descriptor_type == "KB":
@@ -275,7 +308,10 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
                     input()
 
             subject_address = next(iter(node.get('subject')))
-            prototype = cluster_to_prototype[entity_to_cluster[subject_address]]
+            try:
+                prototype = cluster_to_prototype[entity_to_cluster[subject_address]]
+            except KeyError:
+                continue
 
             if total_score in results:
                 results[total_score].add((total_score, prototype))
@@ -333,9 +369,14 @@ def main():
                         help='The maximum number of EPs *per entrypoint description*')
     args = parser.parse_args()
 
-    print("Parsing SOIN XML...")
-    soin = SOIN.process_xml(args.soin_in)
-    print("\tDone.\n")
+    if args.soin_in[-1] != '/':
+        args.soin_in[-1] += '/'
+
+    if args.out_path[-1] != '/':
+        args.out_path[-1] += '/'
+
+    if not(os.path.exists(args.out_path)):
+        os.mkdir(args.out_path)
 
     print("Loading Graph...")
     graph = load_graph(args.graph_in)
@@ -345,29 +386,41 @@ def main():
     cluster_to_prototype, entity_to_cluster = get_cluster_mappings(graph)
     print("\tDone.\n")
 
-    print("Resolving all entrypoints...")
-    ep_dict, ep_weights_dict = resolve_all_entrypoints(graph, soin.entrypoints, cluster_to_prototype, entity_to_cluster, args.ep_cap)
-    print("\tDone.\n")
+    soins = []
+    for f in os.listdir(args.soin_in):
+        if f.endswith('.xml'):
+            soins.append(f)
+    s_count = 0
+    for s in soins:
+        s_count += 1
+        print("Processing SOIN " + str(s_count) + " of " + str(len(soins)))
+        print("\tParsing SOIN XML...")
+        soin = SOIN.process_xml(args.soin_in + s)
+        print("\t\tDone.\n")
 
-    write_me = {
-        'graph': '',
-        'entrypoints': ep_dict,
-        'entrypointWeights': ep_weights_dict,
-        'queries': [],
-        'facets': [],
-    }
+        print("\tResolving all entrypoints...")
+        ep_dict, ep_weights_dict = resolve_all_entrypoints(graph, soin.entrypoints, cluster_to_prototype, entity_to_cluster, args.ep_cap)
+        print("\t\tDone.\n")
 
-    print("Serializing data structures...")
-    temporal_info = soin.temporal_info_to_dict()
-    for frame in soin.frames:
-        frame_rep = frame.frame_to_dict(temporal_info)
-        write_me['facets'].append(frame_rep)
-    print("\tDone.\n")
+        write_me = {
+            'graph': '',
+            'entrypoints': ep_dict,
+            'entrypointWeights': ep_weights_dict,
+            'queries': [],
+            'facets': [],
+        }
 
-    print("Writing output...")
-    with open(args.out_path, 'w') as out:
-        json.dump(write_me, out, indent=1)
-    print("\tDone.\n")
+        print("\tSerializing data structures...")
+        temporal_info = soin.temporal_info_to_dict()
+        for frame in soin.frames:
+            frame_rep = frame.frame_to_dict(temporal_info)
+            write_me['facets'].append(frame_rep)
+        print("\t\tDone.\n")
+
+        print("\tWriting output...")
+        with open(args.out_path + s.strip('.xml') + '_query.json', 'w') as out:
+            json.dump(write_me, out, indent=1)
+        print("\t\tDone.\n")
 
 
 if __name__ == "__main__":
