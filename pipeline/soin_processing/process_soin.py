@@ -13,11 +13,7 @@
     Author: Eric Holgate
             holgate@utexas.edu
 """
-from aif import AidaGraph
-from pipeline.soin_processing import SOIN
-from pipeline.soin_processing.TypedDescriptor import *
-from pipeline.soin_processing.templates_and_constants import DEBUG, SCORE_WEIGHTS, DEBUG_SCORE_FLOOR
-
+import sys
 import json
 import os
 import argparse
@@ -25,6 +21,15 @@ import rdflib
 import itertools
 
 from copy import deepcopy
+from os.path import dirname, realpath
+src_path = dirname(dirname(dirname(realpath(__file__))))
+sys.path.insert(0, src_path)
+
+from aif import AidaGraph
+from pipeline.soin_processing import SOIN
+from pipeline.soin_processing.TypedDescriptor import *
+from pipeline.soin_processing.templates_and_constants import DEBUG, SCORE_WEIGHTS, DEBUG_SCORE_FLOOR
+
 
 graph_path = '/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R107'
 graph_path = '/Users/eholgate/Downloads/GAIA_1-OPERA_3_Colorado_1/NIST/'
