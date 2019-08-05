@@ -374,12 +374,6 @@ def main():
                         help='The maximum number of EPs *per entrypoint description*')
     args = parser.parse_args()
 
-    if args.soin_in[-1] != '/':
-        args.soin_in[-1] += '/'
-
-    if args.out_path[-1] != '/':
-        args.out_path[-1] += '/'
-
     if not(os.path.exists(args.out_path)):
         os.mkdir(args.out_path)
 
