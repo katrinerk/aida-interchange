@@ -1,4 +1,4 @@
-from pipeline.soin_processing.templates_and_constants import DEBUG
+from pipeline.soin_processing.templates_and_constants import DEBUG, BB_DEBUG, BB_DEBUG_FLOOR
 
 
 def compute_string_overlap(observed, target):
@@ -20,7 +20,8 @@ def compute_string_overlap(observed, target):
     else:
         overlap.append(observed[1])
 
-    print('overlap: ' + str(overlap))
+    if DEBUG:
+        print('overlap: ' + str(overlap))
 
     len_overlap = overlap[1] - overlap[0]
     overlap_target = len_overlap/len_target
@@ -88,7 +89,24 @@ def compute_bounding_box_overlap(observed, target):
     overlap_target = area_overlap / area_target
     overlap_observed = area_overlap / area_observed
 
-    return ((overlap_target + overlap_observed)/2)*100
+    window_score = ((overlap_target + overlap_observed)/2)*100
+    if BB_DEBUG and window_score > BB_DEBUG_FLOOR:
+        print("OBSERVED: ")
+        print("(" + str(observed['topleft'][0]) + "," + str(observed['topleft'][1]))
+        print("(" + str(observed['bottomright'][0]) + "," + str(observed['bottomright'][1]))
+        print("Area: " + str(area_observed) + "\n")
+
+        print("TARGET: ")
+        print("(" + str(target['topleft'][0]) + "," + str(target['topleft'][1]))
+        print("(" + str(target['bottomright'][0]) + "," + str(target['bottomright'][1]))
+        print("Area: " + str(area_target) + "\n")
+
+        print("OVERLAP: ")
+        print("(" + str(overlap_coords['topleft_x']) + "," + str(overlap_coords['topleft_y']) + ")")
+        print("(" + str(overlap_coords['bottomright_x']) + "," + str(overlap_coords['bottomright_y']) + ")")
+        print("Area: " + str(area_observed) + "\n")
+        input()
+    return window_score
 
 
 class TypedDescriptor:

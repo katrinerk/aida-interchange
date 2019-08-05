@@ -369,9 +369,14 @@ def main():
                         help='The maximum number of EPs *per entrypoint description*')
     args = parser.parse_args()
 
-    print("Parsing SOIN XML...")
-    soin = SOIN.process_xml(args.soin_in)
-    print("\tDone.\n")
+    if args.soin_in[-1] != '/':
+        args.soin_in[-1] += '/'
+
+    if args.out_path[-1] != '/':
+        args.out_path[-1] += '/'
+
+    if not(os.path.exists(args.out_path)):
+        os.mkdir(args.out_path)
 
     print("Loading Graph...")
     graph = load_graph(args.graph_in)
@@ -381,29 +386,41 @@ def main():
     cluster_to_prototype, entity_to_cluster = get_cluster_mappings(graph)
     print("\tDone.\n")
 
-    print("Resolving all entrypoints...")
-    ep_dict, ep_weights_dict = resolve_all_entrypoints(graph, soin.entrypoints, cluster_to_prototype, entity_to_cluster, args.ep_cap)
-    print("\tDone.\n")
+    soins = []
+    for f in os.listdir(args.soin_in):
+        if f.endswith('.xml'):
+            soins.append(f)
+    s_count = 0
+    for s in soins:
+        s_count += 1
+        print("Processing SOIN " + str(s_count) + " of " + str(len(soins)))
+        print("\tParsing SOIN XML...")
+        soin = SOIN.process_xml(args.soin_in + s)
+        print("\t\tDone.\n")
 
-    write_me = {
-        'graph': '',
-        'entrypoints': ep_dict,
-        'entrypointWeights': ep_weights_dict,
-        'queries': [],
-        'facets': [],
-    }
+        print("\tResolving all entrypoints...")
+        ep_dict, ep_weights_dict = resolve_all_entrypoints(graph, soin.entrypoints, cluster_to_prototype, entity_to_cluster, args.ep_cap)
+        print("\t\tDone.\n")
 
-    print("Serializing data structures...")
-    temporal_info = soin.temporal_info_to_dict()
-    for frame in soin.frames:
-        frame_rep = frame.frame_to_dict(temporal_info)
-        write_me['facets'].append(frame_rep)
-    print("\tDone.\n")
+        write_me = {
+            'graph': '',
+            'entrypoints': ep_dict,
+            'entrypointWeights': ep_weights_dict,
+            'queries': [],
+            'facets': [],
+        }
 
-    print("Writing output...")
-    with open(args.out_path, 'w') as out:
-        json.dump(write_me, out, indent=1)
-    print("\tDone.\n")
+        print("\tSerializing data structures...")
+        temporal_info = soin.temporal_info_to_dict()
+        for frame in soin.frames:
+            frame_rep = frame.frame_to_dict(temporal_info)
+            write_me['facets'].append(frame_rep)
+        print("\t\tDone.\n")
+
+        print("\tWriting output...")
+        with open(args.out_path + s.strip('.xml') + '_query.json', 'w') as out:
+            json.dump(write_me, out, indent=1)
+        print("\t\tDone.\n")
 
 
 if __name__ == "__main__":
