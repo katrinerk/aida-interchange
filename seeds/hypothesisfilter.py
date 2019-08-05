@@ -207,7 +207,7 @@ class AidaHypothesisFilter:
                 self.event_attack_attacker_instrument_compatible,
                 self.event_attack_all_roles_different,
                 self.single_type_per_eventrel,
-                self.relations_need_twoargs
+                self.relations_need_twoargs,
                 self.events_need_twoargs
                 ]
 
