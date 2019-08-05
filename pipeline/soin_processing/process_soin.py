@@ -160,7 +160,7 @@ def get_bounding_box_node(graph, justification_node):
     bounding_box_id_set = justification_node.get('boundingBox')
     if not bounding_box_id_set:
         return False
-    print(bounding_box_id_set)
+    # print(bounding_box_id_set)
     bounding_box_node = graph.get_node(next(iter(bounding_box_id_set)))
     if not bounding_box_node:
         return False
