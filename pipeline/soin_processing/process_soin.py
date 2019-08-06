@@ -14,11 +14,7 @@
             holgate@utexas.edu
 """
 
-from aif import AidaGraph
-from pipeline.soin_processing import SOIN
-from pipeline.soin_processing.TypedDescriptor import *
 from pipeline.soin_processing.templates_and_constants import DEBUG, SCORE_WEIGHTS, DEBUG_SCORE_FLOOR, ROLE_PENALTY_DEBUG
-
 
 import sys
 import json
