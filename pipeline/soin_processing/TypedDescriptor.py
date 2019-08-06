@@ -274,7 +274,7 @@ class StringDescriptor:
                 print("Typed Descriptor: " + str(self))
                 print("Subject Node: ")
                 print('[]')
-                print("Score: 100")
+                print("Score: 0")
                 print()
             return 0
         names = []

@@ -13,6 +13,9 @@
     Author: Eric Holgate
             holgate@utexas.edu
 """
+
+from pipeline.soin_processing.templates_and_constants import DEBUG, SCORE_WEIGHTS, DEBUG_SCORE_FLOOR, ROLE_PENALTY_DEBUG
+
 import sys
 import json
 import os
@@ -31,7 +34,7 @@ from pipeline.soin_processing.TypedDescriptor import *
 from pipeline.soin_processing.templates_and_constants import DEBUG, SCORE_WEIGHTS, DEBUG_SCORE_FLOOR
 
 
-graph_path = '/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R107'
+graph_path = '/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R103'
 graph_path = '/Users/eholgate/Downloads/GAIA_1-OPERA_3_Colorado_1/NIST/'
 
 
@@ -58,6 +61,7 @@ def load_graph(in_dir):
 def get_cluster_mappings(graph):
     cluster_to_prototype = {}
     entities_to_clusters = {}
+    entities_to_roles = {}
 
     for node in graph.nodes():
         if node.is_sameas_cluster():
@@ -66,8 +70,22 @@ def get_cluster_mappings(graph):
             cluster_member = next(iter(node.get('clusterMember')))
             cluster = next(iter(node.get('cluster')))
             entities_to_clusters[cluster_member] = cluster
+        elif node.is_statement():
+            pred_set = node.get('predicate', shorten=True)
+            if not pred_set:
+                continue
+            pred = next(iter(pred_set)).strip()
+            if pred != 'type':
+                obj_set = node.get('object')
+                if not obj_set:
+                    continue
+                obj = next(iter(obj_set))
+                if obj in entities_to_roles:
+                    entities_to_roles[obj].add(pred)
+                else:
+                    entities_to_roles[obj] = {pred}
 
-    return cluster_to_prototype, entities_to_clusters
+    return cluster_to_prototype, entities_to_clusters, entities_to_roles
 
 
 def check_type(node, typed_descriptor):
@@ -234,7 +252,7 @@ def check_descriptor(graph, typing_statement, typed_descriptor):
     return False
 
 
-def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, ep_cap):
+def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, entities_to_roles, role_vars, ep_cap, role_flag):
     """
     A function to resolve an entrypoint to the set of entity nodes that satisfy it.
     This function iterates through every node in the graph. If that node is a typing statement, it computes a
@@ -281,6 +299,14 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
                             num_descriptors += 1
                             descriptor_score += check_descriptor(graph, node, typed_descriptor)
 
+            subject_address = next(iter(node.get('subject')))
+            try:
+                prototype = cluster_to_prototype[entity_to_cluster[subject_address]]
+            except KeyError:
+                if DEBUG:
+                    print("KEY ERROR IN PROTOTYPE MAPPINGS!!")
+                continue
+
             # Compute the total score, pull the prototype, and add the prototype node to the results dict
             # Compute the denominator for the score based on what information was present
             raw_score = (typed_score/100) + (name_score/100) + (descriptor_score/100)
@@ -297,12 +323,24 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
                 score_numerator += ((descriptor_score/num_descriptors)/100) * SCORE_WEIGHTS['descriptor']
                 score_denominator += SCORE_WEIGHTS['descriptor']
 
+            total_score = (score_numerator/score_denominator) * 100
+            if role_flag:
+                penalty = 0
+                for role in role_vars[entrypoint.variable[0]]:  # [0] for senseless tuple wrapper
+                    if role not in entities_to_roles.get(subject_address, {}):
+                        if ROLE_PENALTY_DEBUG:
+                            print("PENALTY APPLIED!")
+                            print("Looking for: " + str(role))
+                            print("Observed roles: " + str(entities_to_roles.get(subject_address, {})))
+                            input()
+                        penalty += 30
+                total_score = score - penalty
+
             if DEBUG:
                 print("Raw Score: " + str(raw_score))
                 print("Score Numerator: " + str(score_numerator))
                 print("Score Denominator: " + str(score_denominator))
 
-            total_score = (score_numerator/score_denominator) * 100
 
             if DEBUG:
                 print("Normalized Score: " + str(total_score))
@@ -311,12 +349,6 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
                 print()
                 if (total_score >= DEBUG_SCORE_FLOOR):
                     input()
-
-            subject_address = next(iter(node.get('subject')))
-            try:
-                prototype = cluster_to_prototype[entity_to_cluster[subject_address]]
-            except KeyError:
-                continue
 
             if total_score in results:
                 results[total_score].add((total_score, prototype))
@@ -343,7 +375,7 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
     return ep_list, ep_weight_list
 
 
-def resolve_all_entrypoints(graph, entrypoints, cluster_to_prototype, entity_to_cluster, ep_cap):
+def resolve_all_entrypoints(graph, entrypoints, cluster_to_prototype, entity_to_cluster, entities_to_roles, var_roles, ep_cap, roles_flag):
     ep_dict = {}
     ep_weight_dict = {}
     for entrypoint in entrypoints:
@@ -352,7 +384,10 @@ def resolve_all_entrypoints(graph, entrypoints, cluster_to_prototype, entity_to_
                                                   entrypoint,
                                                   cluster_to_prototype,
                                                   entity_to_cluster,
-                                                  ep_cap)
+                                                  entities_to_roles,
+                                                  var_roles,
+                                                  ep_cap,
+                                                  roles_flag)
         ep_dict[entrypoint.variable[0]] = ep_list
         ep_weight_dict[entrypoint.variable[0]] = ep_weight_list
 
@@ -372,6 +407,11 @@ def main():
                         type=int,
                         default=50,
                         help='The maximum number of EPs *per entrypoint description*')
+    parser.add_argument('-r',
+                        '--roles',
+                        action='store_true',
+                        default=False,
+                        help='This flag tells the program to consider role information')
     args = parser.parse_args()
 
     if not(os.path.exists(args.out_path)):
@@ -382,7 +422,7 @@ def main():
     print("\tDone.\n")
 
     print("Getting Cluster Mappings...")
-    cluster_to_prototype, entity_to_cluster = get_cluster_mappings(graph)
+    cluster_to_prototype, entity_to_cluster, entities_to_roles = get_cluster_mappings(graph)
     print("\tDone.\n")
 
     soins = []
@@ -397,8 +437,32 @@ def main():
         soin = SOIN.process_xml(args.soin_in + s)
         print("\t\tDone.\n")
 
+
+        print('\tGathering role information...')
+        ep_variables = set()
+        for ep in soin.entrypoints:
+            ep_variables.add(ep.variable[0])  # [0] is for senseless tuple wrapper
+
+        var_roles = {}
+        for frame in soin.frames:
+            for edge in frame.edge_list:
+                if edge.obj in ep_variables:
+                    if edge.obj in var_roles:
+                        var_roles[edge.obj].add(edge.predicate)
+                    else:
+                        var_roles[edge.obj] = {edge.predicate}
+        print("\t\tDone.\n")
+
         print("\tResolving all entrypoints...")
-        ep_dict, ep_weights_dict = resolve_all_entrypoints(graph, soin.entrypoints, cluster_to_prototype, entity_to_cluster, args.ep_cap)
+        ep_dict, ep_weights_dict = resolve_all_entrypoints(graph,
+                                                           soin.entrypoints,
+                                                           cluster_to_prototype,
+                                                           entity_to_cluster,
+                                                           entities_to_roles,
+                                                           var_roles,
+                                                           args.ep_cap,
+                                                           args.roles)
+
         print("\t\tDone.\n")
 
         write_me = {
