@@ -13,11 +13,14 @@
     Author: Eric Holgate
             holgate@utexas.edu
 """
+
 from aif import AidaGraph
 from pipeline.soin_processing import SOIN
 from pipeline.soin_processing.TypedDescriptor import *
 from pipeline.soin_processing.templates_and_constants import DEBUG, SCORE_WEIGHTS, DEBUG_SCORE_FLOOR, ROLE_PENALTY_DEBUG
 
+
+import sys
 import json
 import os
 import argparse
@@ -25,6 +28,15 @@ import rdflib
 import itertools
 
 from copy import deepcopy
+from os.path import dirname, realpath
+src_path = dirname(dirname(dirname(realpath(__file__))))
+sys.path.insert(0, src_path)
+
+from aif import AidaGraph
+from pipeline.soin_processing import SOIN
+from pipeline.soin_processing.TypedDescriptor import *
+from pipeline.soin_processing.templates_and_constants import DEBUG, SCORE_WEIGHTS, DEBUG_SCORE_FLOOR
+
 
 graph_path = '/Users/eholgate/Desktop/SOIN/Annotation_Generated_V4/Annotation_Generated_V4_Valid/R103'
 graph_path = '/Users/eholgate/Downloads/GAIA_1-OPERA_3_Colorado_1/NIST/'
@@ -405,12 +417,6 @@ def main():
                         default=False,
                         help='This flag tells the program to consider role information')
     args = parser.parse_args()
-
-    if args.soin_in[-1] != '/':
-        args.soin_in[-1] += '/'
-
-    if args.out_path[-1] != '/':
-        args.out_path[-1] += '/'
 
     if not(os.path.exists(args.out_path)):
         os.mkdir(args.out_path)
