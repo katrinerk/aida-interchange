@@ -62,9 +62,9 @@ class OneClusterSeed:
         else: self.unfillable = unfillable
 
         # some weights for things that might go wrong during query creation
-        self.FAILED_QUERY_WT = -0.5
-        self.FAILED_TEMPORAL = -0.5
-        self.FAILED_ONTOLOGY = -0.5
+        self.FAILED_QUERY_WT = -0.1
+        self.FAILED_TEMPORAL = -0.1
+        self.FAILED_ONTOLOGY = -0.1
         self.DUPLICATE_FILLER = -10
 
 
