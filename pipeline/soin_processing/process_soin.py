@@ -334,7 +334,7 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
                             print("Observed roles: " + str(entities_to_roles.get(subject_address, {})))
                             input()
                         penalty += 30
-                total_score = score - penalty
+                total_score = total_score - penalty
 
             if DEBUG:
                 print("Raw Score: " + str(raw_score))
