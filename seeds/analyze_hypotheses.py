@@ -95,6 +95,7 @@ for hypothesis in hypothesis_collection.hypotheses:
     num_twostep_neighbors.append(len(twostep_neighbors))
 
 print("============ Hypothesis analysis ===========")
+print("All counts are of statements included in the hypothesis.")
 print("------ Event and relation analysis ---------")
 
 print("Percentage events vs. relations", round(statistics.mean(percentage_events_vs_relations), 3), "sd", round(statistics.stdev(percentage_events_vs_relations), 3))
@@ -106,6 +107,8 @@ print("# role statements per entity", round(statistics.mean(numstatements_entity
 print("# role statements per core entity", round(statistics.mean(numstatements_core_entity), 3), "sd", round(statistics.stdev(numstatements_core_entity), 3))
 
 print("============ Seed analysis ===========")
+print("Graph density analysis:")
+print("Neighbor EREs are counted irrespective of whether they are in the hypothesis.")
 print("# EREs one step from included entities", round(statistics.mean(num_onestep_neighbors), 3), "sd", round(statistics.stdev(num_onestep_neighbors), 3))
 print("# EREs two steps from included entities", round(statistics.mean(num_twostep_neighbors), 3), "sd", round(statistics.stdev(num_twostep_neighbors), 3))
 
