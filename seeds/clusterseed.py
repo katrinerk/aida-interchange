@@ -29,7 +29,7 @@ from seeds.datecheck import AidaIncompleteDate, temporal_constraint_match
 # just a data structure, doesn't do much.
 class OneClusterSeed:
     def __init__(self, graph_obj, core_constraints, temporal_constraints, hypothesis, qvar_filler, lweight = 0.0,
-                    unfilled = None, unfillable = None, entrypoints = None):
+                    unfilled = None, unfillable = None, entrypoints = None, entrypointweight = 0.0):
         # the following data is not changed, and is kept just for info
         self.graph_obj = graph_obj
         self.core_constraints = core_constraints
@@ -42,6 +42,8 @@ class OneClusterSeed:
 
         # what is my current log weight?
         self.lweight = lweight
+        # weight according to the entry points
+        self.entrypointweight = entrypointweight
         
         # hypothesis is an AidaHypothesis object
         self.hypothesis = hypothesis
@@ -94,6 +96,7 @@ class OneClusterSeed:
 
         elif nfc["failed"]:
             # this particular constraint was not fillable, and will never be fillable.
+            # print("failed constraint", self.core_constraints[nfc["index"]], self.qvar_filler)
             self.unfilled.remove(nfc["index"])
             self.unfillable.add(nfc["index"])
             # update the weight
@@ -149,7 +152,10 @@ class OneClusterSeed:
                     retv.append(OneClusterSeed(self.graph_obj, self.core_constraints, self.temporal_constraints, new_hypothesis, new_qvar_filler,
                                                 lweight = self.lweight + add_weight, unfilled = new_unfilled, unfillable = new_unfillable,
                                                 entrypoints = self.entrypoints))
-                
+
+                ## else:
+                ##     if "Stmt1" in new_hypothesis.stmts:
+                ##         print("failed to validate", stmtlabel, new_hypothesis.stmts)
 
             if len(retv) == 0:
                 # all the fillers were filtered away
@@ -180,6 +186,7 @@ class OneClusterSeed:
         for constraint_index in self.unfilled:
             
             subj, pred, obj = self.core_constraints[constraint_index]
+            # print("HIER", subj, pred, obj, self.qvar_filler)
 
             # if either subj or obj is known (is an ERE or has an entry in qvar_filler,
             # then we should be able to fill this constraint now, or it is unfillable
@@ -280,7 +287,7 @@ class OneClusterSeed:
     def _fill_constraint(self, constraint_index, knownere, knownrole, pred, unknown, unknownrole):
         # find statements that could fill the role
         candidates = self._statement_candidates(knownere, pred, knownrole)
-
+        
         if candidates is None:
             # no candidates found at all, constraint is unfillable
             return { "index" : constraint_index,
@@ -431,7 +438,7 @@ class OneClusterSeed:
                 # we also check wether including this statement will violate another constraint.
                 # if so, we do  not include it
                 if self._second_constraint_violated(nfc["variable"], filler, nfc["index"]):
-                    # print("second constraint violated, skipping", stmtlabel[-5:], self.graph_obj.stmt_predicate(stmtlabel))
+                    print("second constraint violated, skipping", stmtlabel, self.graph_obj.stmt_predicate(stmtlabel))
                     continue
 
             # can this statement be added to the hypothesis without contradiction?
@@ -585,7 +592,7 @@ class ClusterSeeds:
 
                 # start a new hypothesis
                 core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), \
-                                              AidaHypothesis(self.graph_obj), qvar_filler, lweight = entrypoint_weight,
+                                              AidaHypothesis(self.graph_obj), qvar_filler, entrypointweight = entrypoint_weight,
                                               entrypoints = list(qvar_filler.keys()))
                 hypotheses_todo.append(core_hyp)
 
@@ -751,48 +758,51 @@ class ClusterSeeds:
     #########################
     # compute a weight for all cluster seeds in self.hypotheses
     def _rank_seeds(self):
-        # rank seeds by their current weight,
-        # which depends on the goodness of their entry points
-        # and on whether they missed any query constraints
-        # this is a list of lists of hypotheses
-        ranking1 = self._rank_seed_byweight(self.hypotheses)
-        # print("ranking1", ranking1, [h.lweight for h in self.hypotheses])
 
-        # HIER
-        # initial ranking by connectedness, using the hypothesis groups
-        ranking2= self._rank_seed_connectedness(self.hypotheses)
-        # print("ranking 2", ranking2)
-        
-        # HIER interpolate rankings
-        ranking_interpolated = [ (ranking1[i] + ranking2[i])/2.0 for i in range(len(ranking1))]
-        # print("ranking interpolated", ranking_interpolated)
-
-        # sort hypotheses by interpolated rankings
-        hypotheses_sorted = [pair[1] for pair in sorted(enumerate(self.hypotheses), key = lambda pair:ranking_interpolated[pair[0]], reverse = True)]
-        
-        # re-rank by diversity. we only care about the self.rank_first_k highest ranked items
-        hypotheses_sorted = self._rank_seed_novelty(hypotheses_sorted)
-
-        # ranking is a list of hypotheses from self.hypotheses, ranked
-        # best first
-        return hypotheses_sorted
-
-    # rank hypotheses by their lweight,
-    # which indicates how good their entrypoints were,
-    # and whether they failed to meet any query constraints
-    def _rank_seed_byweight(self, hypotheses):
-        # sort hypotheses by weight, highest first
-        # return ranks
-        # highest to lowest, hence listlength-ranking
-        return (len(hypotheses) - scipy.stats.rankdata([h.lweight for h in hypotheses], method = "min")).astype(int)
+        return self._sort_hypotheses_grouped(self.hypotheses, lambda h:h.entrypointweight, self._sort_hypotheses_lweight_connectedness_novelty, "level 1")
     
+        ## #####
+        ## # instead do this: use connectedness ranking only on hypotheses that are at equal rank
+        ## # with respect to their entry point and failed constraint weights
+        ## hypotheses_sorted = self._rankby_weight_and_connectedness(self.hypotheses)
+        
+        ## # re-rank by diversity. we only care about the self.rank_first_k highest ranked items
+        ## hypotheses_sorted = self._rank_seed_novelty(hypotheses_sorted)
+
+        ## # ranking is a list of hypotheses from self.hypotheses, ranked
+        ## # best first
+        ## return hypotheses_sorted
+
+
+    # grouping hypotheses by weight,
+    # then sorting each group,
+    # then concatenate results.
+    # high weight first
+    def _sort_hypotheses_grouped(self, hypotheses, weight_function, sorting_function, label):
+        groups = { }
+        for h in hypotheses:
+            weight = weight_function(h)
+            if weight not in groups:
+                groups[weight] = [ ]
+            groups[weight].append(h)
+
+        sorted_hypotheses =  [ ]
+        for weight, group in sorted(groups.items(), key = lambda pair: pair[0], reverse = True):
+            # print("group" ,label, "with weight", weight, len(group))
+            sorted_hypotheses += sorting_function(group)
+
+        return sorted_hypotheses
+
+    def _sort_hypotheses_lweight_connectedness_novelty(self, hypotheses):
+        # group hypotheses by lweight, then sort groups by connectedness
+        return self._sort_hypotheses_grouped(hypotheses, lambda h:h.lweight, self._sort_hypotheses_connectedness_novelty, "level 2")
+
+
+    def _sort_hypotheses_connectedness_novelty(self, hypotheses):
+        sorted_hypotheses = self._sort_hypotheses_connectedness(hypotheses)
+        return self._rerank_hypotheses_novelty(sorted_hypotheses)
     
-    # weighting based on connectedness of a cluster seed:
-    # sum of degrees of EREs in the cluster.
-    # this rewards both within-cluster and around-cluster connectedness
-    # this does seed connectedness ratings for multiple groups of hypotheses,
-    # where the grouping is a mapping from weight to group
-    def _rank_seed_connectedness(self, hypotheses):
+    def _sort_hypotheses_connectedness(self, hypotheses):
         weights = [ ]
 
         for hypothesis in hypotheses:
@@ -805,43 +815,41 @@ class ClusterSeeds:
             weights.append( outdeg)
 
         # print("connectedness weights", weights)
+        return [pair[1] for pair in sorted(enumerate(hypotheses), key = lambda pair:weights[pair[0]], reverse = True)]
 
-        return (len(hypotheses) - scipy.stats.rankdata(weights, method = "min")).astype(int)
 
-    # given a list of pairs (ranking, OneClusterSeed object),
-    # produce a new such list where objects are ranked more highly
-    # if they differ most from all the top k items
-    def _rank_seed_novelty(self, hypotheses):
+    def _rerank_hypotheses_novelty(self, hypotheses):
         if len(hypotheses) == 0:
             return hypotheses
         
-        ranked = [ hypotheses[0] ]
-        torank = hypotheses[1:]
+        done = [ hypotheses[0] ]
+        todo = hypotheses[1:]
 
         qvar_characterization = self._update_qvar_characterization_for_seednovelty({ }, hypotheses[0])
 
-        # print("HIER rank0", hypotheses[0].qvar_filler)
         
-        while len(torank) > max(0, len(hypotheses) - self.rank_first_k):
+        while len(todo) > max(0, len(hypotheses) - self.rank_first_k):
             # select the item to rank next
             # print("HIER qvar ch.", qvar_characterization)
-            nextitem_index = self._rank_seed_novelty_one(torank, qvar_characterization)
+            nextitem_index = self._choose_seed_novelty_one(todo, qvar_characterization)
             if nextitem_index is None:
                 # we didn't find any more items to rank
                 break
             
             # append the next best item to the ranked items
-            nextitem = torank.pop(nextitem_index)
-            ranked.append(nextitem)
+            nextitem = todo.pop(nextitem_index)
+            # print("next is", nextitem_index)
+            done.append(nextitem)
             qvar_characterization = self._update_qvar_characterization_for_seednovelty(qvar_characterization, nextitem)
 
         # at this point we have ranked the self.rank_first_k items
         # just attach the rest of the items at the end
-        ranked += torank
+        done += todo
+        # print("DONE")
 
-        return ranked
-
-    def _rank_seed_novelty_one(self, torank, qvar_characterization):
+        return done
+    
+    def _choose_seed_novelty_one(self, torank, qvar_characterization):
         # for each item in torank, determine difference from items in ranked
         # in terms of qvar_filler
 
@@ -896,7 +904,7 @@ class ClusterSeeds:
 
         
     # ranking by seed novelty uses a characterization of the query variable fillers for the
-    # already ranked items.
+    # already ranking items.
     # this function takes an existing query variable characterization and updates it
     # with the query variable fillers of the given hypothesis, which is a OneClusterSeed.
     # format of qvar_characterization:
@@ -906,9 +914,172 @@ class ClusterSeeds:
     # with a value equivalent to the number of previous hypotheses that had the same filler.
     def _update_qvar_characterization_for_seednovelty(self, qvar_characterization, hypothesis):
         for qvar, filler in hypothesis.qvar_filler.items():
+            if qvar in hypothesis.entrypoints:
+                # do not include entry points in the novelty calculation:
+                # novelty in entry points is not rewarded.
+                continue
+            
             if qvar not in qvar_characterization:
                 qvar_characterization[ qvar ] = { }
 
             qvar_characterization[ qvar ][ filler ] = qvar_characterization[qvar].get(filler, 0) + 1
 
         return qvar_characterization
+
+    ## # ranking by weight and connectedness:
+    ## # group hypotheses by weight, then rank equal-weight hypotheses by connectedness
+    ## def _rankby_weight_and_connectedness(self, hypotheses):
+    ##     hgroups = self._group_seeds_byweight(hypotheses)
+
+    ##     # list of ranked hypotheses, highest first
+    ##     ranked_hypotheses =  [ ]
+    ##     for weight, hgroup in sorted(hgroups.items(), key = lambda pair: pair[1], reverse = True):
+    ##         ranking_levels = self._rank_seed_connectedness(hgroup)
+    ##         hypotheses_sorted = [pair[1] for pair in sorted(enumerate(self.hypotheses), key = lambda pair:ranking_levels[pair[0]], reverse = True)]
+    ##         ranked_hypotheses += hypotheses_sorted
+
+    ##     return ranked_hypotheses
+        
+
+    ## # rank hypotheses by their lweight,
+    ## # which indicates how good their entrypoints were,
+    ## # and whether they failed to meet any query constraints
+    ## #
+    ## # returns ranks of hypotheses, highest should go first
+    ## def _rank_seed_byweight(self, hypotheses):
+    ##     # sort hypotheses by weight, highest first
+    ##     # return ranks
+    ##     # highest to lowest, hence listlength-ranking
+    ##     return (len(hypotheses) - scipy.stats.rankdata([h.lweight for h in hypotheses], method = "min")).astype(int)
+    
+    
+    ## # weighting based on connectedness of a cluster seed:
+    ## # sum of degrees of EREs in the cluster.
+    ## # this rewards both within-cluster and around-cluster connectedness
+    ## # this does seed connectedness ratings for multiple groups of hypotheses,
+    ## # where the grouping is a mapping from weight to group
+    ## def _rank_seed_connectedness(self, hypotheses):
+    ##     weights = [ ]
+
+    ##     for hypothesis in hypotheses:
+    ##         outdeg = 0
+    ##         # for each ERE of this hypothesis
+    ##         for erelabel in hypothesis.hypothesis.eres():
+    ##             # find statements IDs of statements adjacent to the EREs of this hypothesis
+    ##             for stmtlabel in self.graph_obj.each_ere_adjacent_stmt_anyrel(erelabel):
+    ##                 outdeg += 1
+    ##         weights.append( outdeg)
+
+    ##     # print("connectedness weights", weights)
+
+    ##     return (len(hypotheses) - scipy.stats.rankdata(weights, method = "min")).astype(int)
+
+    ## # given a list of pairs (ranking, OneClusterSeed object),
+    ## # produce a new such list where objects are ranked more highly
+    ## # if they differ most from all the top k items
+    ## def _rank_seed_novelty(self, hypotheses):
+    ##     if len(hypotheses) == 0:
+    ##         return hypotheses
+        
+    ##     ranked = [ hypotheses[0] ]
+    ##     torank = hypotheses[1:]
+
+    ##     qvar_characterization = self._update_qvar_characterization_for_seednovelty({ }, hypotheses[0])
+
+    ##     # print("HIER rank0", hypotheses[0].qvar_filler)
+        
+    ##     while len(torank) > max(0, len(hypotheses) - self.rank_first_k):
+    ##         # select the item to rank next
+    ##         # print("HIER qvar ch.", qvar_characterization)
+    ##         nextitem_index = self._rank_seed_novelty_one(torank, qvar_characterization)
+    ##         if nextitem_index is None:
+    ##             # we didn't find any more items to rank
+    ##             break
+            
+    ##         # append the next best item to the ranked items
+    ##         nextitem = torank.pop(nextitem_index)
+    ##         ranked.append(nextitem)
+    ##         qvar_characterization = self._update_qvar_characterization_for_seednovelty(qvar_characterization, nextitem)
+
+    ##     # at this point we have ranked the self.rank_first_k items
+    ##     # just attach the rest of the items at the end
+    ##     ranked += torank
+
+    ##     return ranked
+
+    ## def _rank_seed_novelty_one(self, torank, qvar_characterization):
+    ##     # for each item in torank, determine difference from items in ranked
+    ##     # in terms of qvar_filler
+
+    ##     best_index = None
+    ##     best_value = None
+        
+    ##     for index, hyp in enumerate(torank):
+    ##         if index >= self.consider_next_k_in_reranking:
+    ##             # we have run out of the next k to consider,
+    ##             # don't go further down the list
+    ##             break
+
+    ##         this_value = 0
+    ##         for qvar, filler in hyp.qvar_filler.items():
+    ##             if qvar in hyp.entrypoints:
+    ##                 # do not count entry point variables when checking for novelty
+    ##                 # print("skipping variable in ranking", qvar)
+    ##                 continue
+    ##             if qvar in qvar_characterization.keys():
+    ##                 if filler in qvar_characterization[ qvar ]:
+    ##                     # there are higher-ranked hypotheses that have the same filler
+    ##                     # for this qvar. take a penalty for that
+    ##                     this_value += qvar_characterization[qvar][filler]
+    ##                 else:
+    ##                     # novel qvar filler! Take a bonus
+    ##                     this_value += self.bonus_for_novelty
+    ##             else:
+    ##                 # this hypothesis, for some reason, has a query variable
+    ##                 # that we haven't seen before.
+    ##                 # this shouldn't happen.
+    ##                 # oh well, take a bonus for novelty then
+    ##                 this_value += self.bonus_for_novelty
+
+    ##         # print("HIER1", this_value, hyp.qvar_filler)
+    ##         # input("hit enter...")
+
+    ##         # at this point we have the value for the current hypothesis.
+    ##         # if it is the minimum achievable value, stop here and go with this hypothesis
+    ##         if this_value <= self.bonus_for_novelty * len(qvar_characterization):
+    ##             best_index = index
+    ##             best_value = this_value
+    ##             break
+
+    ##         # check if the current value is better than the previous best.
+    ##         # if so, record this index as the best one
+    ##         if best_value is None or this_value < best_value:
+    ##             best_index = index
+    ##             best_value = this_value
+
+
+    ##     return best_index
+
+        
+    ## # ranking by seed novelty uses a characterization of the query variable fillers for the
+    ## # already ranked items.
+    ## # this function takes an existing query variable characterization and updates it
+    ## # with the query variable fillers of the given hypothesis, which is a OneClusterSeed.
+    ## # format of qvar_characterization:
+    ## # qvar -> filler -> count
+    ## #
+    ## # That is, we penalize a hypothesis that has the same qvar filler that we have seen before
+    ## # with a value equivalent to the number of previous hypotheses that had the same filler.
+    ## def _update_qvar_characterization_for_seednovelty(self, qvar_characterization, hypothesis):
+    ##     for qvar, filler in hypothesis.qvar_filler.items():
+    ##         if qvar in hyothesis.entrypoints:
+    ##             # do not include entry points in the novelty calculation:
+    ##             # novelty in entry points is not rewarded.
+    ##             continue
+            
+    ##         if qvar not in qvar_characterization:
+    ##             qvar_characterization[ qvar ] = { }
+
+    ##         qvar_characterization[ qvar ][ filler ] = qvar_characterization[qvar].get(filler, 0) + 1
+
+    ##     return qvar_characterization

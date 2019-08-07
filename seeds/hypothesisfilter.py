@@ -91,7 +91,8 @@ class AidaHypothesisFilter:
         event_ere = self.graph_obj.stmt_subject(test_stmt)
         arg_ere = self.graph_obj.stmt_object(test_stmt)
 
-        if any(self.graph_obj.stmt_object(stmt) == arg_ere for stmt in self.graph_obj.each_ere_adjacent_stmt_anyrel(event_ere) if stmt != test_stmt):
+        # print("HIER2", [(stmt, label, stmtarg, stmtarg == arg_ere, stmt == test_stmt) for stmt, label, stmtarg in hypothesis.eventrelation_each_argstmt(event_ere)])
+        if any(stmtarg == arg_ere for stmt, label, stmtarg in hypothesis.eventrelation_each_argstmt(event_ere) if stmt != test_stmt):
             # print("two attack roles filled by same argument, discarding", test_stmt)
             return False
 

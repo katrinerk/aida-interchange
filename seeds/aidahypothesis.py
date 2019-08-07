@@ -277,7 +277,7 @@ class AidaHypothesis:
             if stmtlabel in self.stmts:
                 stmt = self.graph_obj.thegraph[stmtlabel]
                 if stmt["subject"] == eventrel_id and self.graph_obj.is_ere(stmt["object"]):
-                    yield (stmt, stmt["predicate"], stmt["object"])
+                    yield (stmtlabel, stmt["predicate"], stmt["object"])
 
     # iterate over arguments of an event or relation in this hypothesis
     # yield pairs of (argument label, ERE ID)
