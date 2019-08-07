@@ -44,6 +44,8 @@ class OneClusterSeed:
         self.lweight = lweight
         # weight according to the entry points
         self.entrypointweight = entrypointweight
+        # print("HIEr entrypwt", self.entrypointweight)
+        # input()
         
         # hypothesis is an AidaHypothesis object
         self.hypothesis = hypothesis
@@ -67,7 +69,7 @@ class OneClusterSeed:
         self.FAILED_QUERY_WT = -0.1
         self.FAILED_TEMPORAL = -0.1
         self.FAILED_ONTOLOGY = -0.1
-        self.DUPLICATE_FILLER = -10
+        self.DUPLICATE_FILLER = -0.01
 
 
     # finalize:
@@ -96,7 +98,7 @@ class OneClusterSeed:
 
         elif nfc["failed"]:
             # this particular constraint was not fillable, and will never be fillable.
-            # print("failed constraint", self.core_constraints[nfc["index"]], self.qvar_filler)
+            # print("failed constraint", self.core_constraints[nfc["index"]][1])# , [(q, v[-5:]) for q, v in self.qvar_filler.items()])
             self.unfilled.remove(nfc["index"])
             self.unfillable.add(nfc["index"])
             # update the weight
@@ -150,12 +152,12 @@ class OneClusterSeed:
                         add_weight += self.FAILED_ONTOLOGY
 
                     retv.append(OneClusterSeed(self.graph_obj, self.core_constraints, self.temporal_constraints, new_hypothesis, new_qvar_filler,
-                                                lweight = self.lweight + add_weight, unfilled = new_unfilled, unfillable = new_unfillable,
+                                                lweight = self.lweight + add_weight, entrypointweight = self.entrypointweight,
+                                                unfilled = new_unfilled, unfillable = new_unfillable,
                                                 entrypoints = self.entrypoints))
 
                 ## else:
-                ##     if "Stmt1" in new_hypothesis.stmts:
-                ##         print("failed to validate", stmtlabel, new_hypothesis.stmts)
+                ##     print("failed to validate", stmtlabel, new_hypothesis.stmts)
 
             if len(retv) == 0:
                 # all the fillers were filtered away
@@ -438,7 +440,7 @@ class OneClusterSeed:
                 # we also check wether including this statement will violate another constraint.
                 # if so, we do  not include it
                 if self._second_constraint_violated(nfc["variable"], filler, nfc["index"]):
-                    print("second constraint violated, skipping", stmtlabel, self.graph_obj.stmt_predicate(stmtlabel))
+                    # print("second constraint violated, skipping", stmtlabel, self.graph_obj.stmt_predicate(stmtlabel))
                     continue
 
             # can this statement be added to the hypothesis without contradiction?
@@ -609,9 +611,6 @@ class ClusterSeeds:
             if printindex % 500 == 0:
                 print("hypotheses done", len(hypotheses_done))
                 
-            # if len(hypotheses_done) > 5:
-            #       break
-            
             core_hyp = hypotheses_todo.popleft()
 
             if self.QS_CUTOFF is not None:
@@ -655,6 +654,9 @@ class ClusterSeeds:
 
                 # mark this hypothesis as done
                 hypotheses_done.append(core_hyp)
+                # print("HIER", len(core_hyp.unfillable), core_hyp.lweight)# , [(q, v[-5:]) for q, v in core_hyp.qvar_filler.items()])
+                # input()
+
                 ## for q, v in core_hyp.qvar_filler.items():
                 ##     print("qvar", q, v[-5:])
                 ## print([s[-5:] for s in core_hyp.hypothesis.stmts])
@@ -726,9 +728,16 @@ class ClusterSeeds:
             # filler weights are in the range of [0, 100]
             # multiply weights/100 of the fillers,
             # then take the log to be in log-probability space
-            weights.append( math.log(functools.reduce(operator.mul, (entrypoint_weights[v][i]/100.0 for v, i in zip(entrypoint_variables, filler_indices)))))
+            weight = 1
+            for v, i in zip(entrypoint_variables, filler_indices):
+                weight *= entrypoint_weights[v][i]
+            weights.append(weight)
+            # print("HIER", qvar_fillers, weight)
+            #input()
+            # weights.append( math.log(functools.reduce(operator.mul, (entrypoint_weights[v][i]/100.0 for v, i in zip(entrypoint_variables, filler_indices)))))
 
         for qvar_filler, weight in sorted(zip(filler_index_tuples, weights), key = lambda pair:pair[1], reverse = True):
+            # print("HIER2wt", weight)
             yield (qvar_filler, weight)
         
     #########################
@@ -758,22 +767,8 @@ class ClusterSeeds:
     #########################
     # compute a weight for all cluster seeds in self.hypotheses
     def _rank_seeds(self):
-
-        return self._sort_hypotheses_grouped(self.hypotheses, lambda h:h.entrypointweight, self._sort_hypotheses_lweight_connectedness_novelty, "level 1")
+        return self._sort_hypotheses_grouped(self.hypotheses, lambda h: h.entrypointweight, self._sort_hypotheses_lweight_connectedness_novelty, "level 1")
     
-        ## #####
-        ## # instead do this: use connectedness ranking only on hypotheses that are at equal rank
-        ## # with respect to their entry point and failed constraint weights
-        ## hypotheses_sorted = self._rankby_weight_and_connectedness(self.hypotheses)
-        
-        ## # re-rank by diversity. we only care about the self.rank_first_k highest ranked items
-        ## hypotheses_sorted = self._rank_seed_novelty(hypotheses_sorted)
-
-        ## # ranking is a list of hypotheses from self.hypotheses, ranked
-        ## # best first
-        ## return hypotheses_sorted
-
-
     # grouping hypotheses by weight,
     # then sorting each group,
     # then concatenate results.
@@ -788,7 +783,7 @@ class ClusterSeeds:
 
         sorted_hypotheses =  [ ]
         for weight, group in sorted(groups.items(), key = lambda pair: pair[0], reverse = True):
-            # print("group" ,label, "with weight", weight, len(group))
+            # print("group" ,label, "with weight", weight, len(group))# , [(v, h.qvar_filler[v][-5:]) for v in h.entrypoints for h in group])
             sorted_hypotheses += sorting_function(group)
 
         return sorted_hypotheses
