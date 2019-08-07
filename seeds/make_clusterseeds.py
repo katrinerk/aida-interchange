@@ -93,7 +93,7 @@ def work(soin_filename, graph_filename = None, graph_dir = None, out_filename = 
     hypothesis_obj.type_completion()
     hypothesis_obj.affiliation_completion()
 
-    print("Writing seeds")
+    print("Writing seeds (if this takes too long, reduce --maxseeds)")
 
     # write hypotheses out in json format.
 

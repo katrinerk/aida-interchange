@@ -576,7 +576,7 @@ class ClusterSeeds:
             facet_cutoff = self.earlycutoff / len(self.soin_obj["facets"])
 
         ################
-        print("Initializing cluster seeds")
+        print("Initializing cluster seeds (if stalled, set earlycutoff)")
         # initialize deque with one core hypothesis per facet
         for facet in self.soin_obj["facets"]:
 
@@ -599,16 +599,16 @@ class ClusterSeeds:
                 hypotheses_todo.append(core_hyp)
 
         ################
-        print("Extending cluster seeds")
+        print("Extending cluster seeds (if too many, reduce rank_cutoff)")
         printindex = 0
-        # signatures of query variables, for early cutoff
+        # signatures of query variables, for qs cutoff
         qvar_signatures = { }
         
         
         # extend all hypotheses in the deque until they are done
         while len(hypotheses_todo) > 0:
             printindex += 1
-            if printindex % 500 == 0:
+            if printindex % 1000 == 0:
                 print("hypotheses done", len(hypotheses_done))
                 
             core_hyp = hypotheses_todo.popleft()
