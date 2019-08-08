@@ -158,7 +158,7 @@ class OneClusterSeed:
                                                 entrypoints = self.entrypoints))
 
                 ## else:
-                ##     print("failed to validate", stmtlabel, new_hypothesis.stmts)
+                ##     print("failed to validate", stmtlabel, self.graph_obj.stmt_predicate(stmtlabel))
 
             if len(retv) == 0:
                 # all the fillers were filtered away
@@ -576,6 +576,14 @@ class ClusterSeeds:
         if self.earlycutoff is not None:
             facet_cutoff = self.earlycutoff / len(self.soin_obj["facets"])
 
+
+        ## # TESTING
+        ## for epvar, epfillers in self.soin_obj["entrypoints"].items():
+        ##     for index, epfiller in enumerate(epfillers):
+        ##         print(epvar, epfiller, self.soin_obj["entrypointWeights"][epvar][index], self._entrypoint_filler_rolescore(epvar, epfiller, self.soin_obj["facets"][0]))
+
+        ## input()
+            
         ################
         print("Initializing cluster seeds (if stalled, set earlycutoff)")
         # initialize deque with one core hypothesis per facet
@@ -990,7 +998,22 @@ class ClusterSeeds:
         for fillers, weight in zip(fillers_list, weight_list):
             yield(fillers, weight)
 
+    def _entrypoint_filler_rolescore(self, ep_var, ep_filler, facet):
+        score = 0
+        
+        for subj, pred, obj in facet["queryConstraints"]:
+            if subj == ep_var:
+                # look for roles adjacent to ep_filler with predicate pred and ep_filler as the subject
+                if any(stmt for stmt in self.graph_obj.each_ere_adjacent_stmt(ep_filler, pred, "subject")):
+                    score += 1
+            elif obj == ep_var:
+                # look for roles adjacent to ep_filler with predicate pred and ep_filler as the object
+                if any(stmt for stmt in self.graph_obj.each_ere_adjacent_stmt(ep_filler, pred, "object")):
+                    score += 1
 
+
+        return score
+    
     #########################
     #########################
     # TEMPORAL ANALYSIS
