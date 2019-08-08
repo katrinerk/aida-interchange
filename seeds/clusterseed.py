@@ -6,13 +6,14 @@
 
 
 import sys
-from collections import deque
+from collections import deque, defaultdict
 import datetime
 import math
 import itertools
 import functools
 import operator
 import scipy.stats
+from operator import itemgetter
 
 from os.path import dirname, realpath
 src_path = dirname(dirname(realpath(__file__)))
@@ -581,22 +582,31 @@ class ClusterSeeds:
         for facet in self.soin_obj["facets"]:
 
             index = 0
-            for qvar_filler, entrypoint_weight in self._each_entry_point_combination(self.soin_obj["entrypoints"], self.soin_obj["entrypointWeights"], facet):
-                ## print("entry points")
-                ## for q, f in qvar_filler.items():
-                ##     print(q, f[-5:])
-                ## print("====")
-                index += 1
+            if self.earlycutoff is None:
+                for qvar_filler, entrypoint_weight in self._each_entry_point_combination(self.soin_obj["entrypoints"], self.soin_obj["entrypointWeights"], facet):
+                    ## print("entry points")
+                    ## for q, f in qvar_filler.items():
+                    ##     print(q, f[-5:])
+                    ## print("====")
+                    # index += 1
 
-                if self.earlycutoff is not None and index >= facet_cutoff:
-                    # print("early cutoff on cluster seeds: breaking off at", index)
-                    break
+                    # if self.earlycutoff is not None and index >= facet_cutoff:
+                    #     # print("early cutoff on cluster seeds: breaking off at", index)
+                    #     break
 
-                # start a new hypothesis
-                core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), \
-                                              AidaHypothesis(self.graph_obj), qvar_filler, entrypointweight = entrypoint_weight,
-                                              entrypoints = list(qvar_filler.keys()))
-                hypotheses_todo.append(core_hyp)
+                    # start a new hypothesis
+                    core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), \
+                                                  AidaHypothesis(self.graph_obj), qvar_filler, entrypointweight = entrypoint_weight,
+                                                  entrypoints = list(qvar_filler.keys()))
+                    hypotheses_todo.append(core_hyp)
+            else:
+                for qvar_filler, entrypoint_weight in self._each_entry_point_combination_w_early_cutoff(
+                        self.soin_obj["entrypoints"], self.soin_obj["entrypointWeights"], facet, earlycutoff=self.earlycutoff):
+                    # start a new hypothesis
+                    core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), \
+                                                  AidaHypothesis(self.graph_obj), qvar_filler, entrypointweight = entrypoint_weight,
+                                                  entrypoints = list(qvar_filler.keys()))
+                    hypotheses_todo.append(core_hyp)
 
         ################
         print("Extending cluster seeds (if too many, reduce rank_cutoff)")
@@ -739,7 +749,248 @@ class ClusterSeeds:
         for qvar_filler, weight in sorted(zip(filler_index_tuples, weights), key = lambda pair:pair[1], reverse = True):
             # print("HIER2wt", weight)
             yield (qvar_filler, weight)
-        
+
+    def _each_entry_point_combination_w_early_cutoff(self, entrypoints, entrypoint_weights, facet, earlycutoff):
+        # variables occurring in this facet: query constraints have the form [subj, pred, obj] where subj, obj are variables.
+        # collect those
+        facet_variables = set(c[0] for c in facet["queryConstraints"]).union(c[2] for c in facet["queryConstraints"])
+        # variables we are filling: all entry points that appear in the query constraints of this facet
+        entrypoint_variables = sorted(e for e in entrypoints.keys() if e in facet_variables)
+
+        ep_weight_filler_mapping = {}
+        for ep_var in entrypoint_variables:
+            ep_weight_filler_mapping[ep_var] = defaultdict(list)
+            ep_fillers = entrypoints[ep_var]
+            ep_weights = entrypoint_weights[ep_var]
+            # Make sure all weights are positive (in case of using role weighting in SoIN matching,
+            # there might be negative weights for entry points, which might mess up rankings)
+            if min(ep_weights) < 0.1:
+                ep_weights = [w - min(ep_weights) + 0.1 for w in ep_weights]
+            for ep_filler, ep_weight in zip(ep_fillers, ep_weights):
+                ep_weight_filler_mapping[ep_var][ep_weight].append(ep_filler)
+
+        def ep_weights_to_ep_fillers(ep_weights):
+            ep_vars = []
+            fillers_list = []
+            for ep_var, weight in ep_weights.items():
+                ep_vars.append(ep_var)
+                fillers_list.append(ep_weight_filler_mapping[ep_var][weight])
+            ep_fillers_list = []
+            for fillers in itertools.product(*fillers_list):
+                # Filter cases where there are duplicate node ids for different entry points
+                if len(set(fillers)) == len(fillers):
+                    ep_fillers_list.append(
+                        {ep_var: filler for ep_var, filler in zip(ep_vars, fillers)})
+            return ep_fillers_list
+
+        fillers_list = []
+        weight_list = []
+
+        # Group 1 (all highest)
+        group_1_ep_weights = {}
+        group_1_weight_prod = 1.0
+        for ep_var, weight_filler_mapping in ep_weight_filler_mapping.items():
+            var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[0]
+            group_1_ep_weights[ep_var] = var_weight
+            group_1_weight_prod *= var_weight
+
+        group_1_ep_fillers = ep_weights_to_ep_fillers(group_1_ep_weights)
+
+        print('Found {} filler combinations with weight {} (group #1)'.format(
+            len(group_1_ep_fillers), group_1_weight_prod))
+
+        fillers_list.extend(group_1_ep_fillers)
+        weight_list.extend([group_1_weight_prod] * len(group_1_ep_fillers))
+
+        # Group 2 (all-but-one highest & one second-highest)
+        if len(fillers_list) < earlycutoff:
+            group_2_ep_weights_list = []
+            group_2_weight_prod_list = []
+
+            # For each entry point, select its second-highest weighted fillers
+            for idx in range(len(ep_weight_filler_mapping)):
+                ep_weights = {}
+                weight_prod = 1.0
+                for ep_var_idx, (ep_var, weight_filler_mapping) in enumerate(
+                        ep_weight_filler_mapping.items()):
+                    if ep_var_idx == idx:
+                        if len(weight_filler_mapping) < 2:
+                            continue
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[1]
+                    else:
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[0]
+
+                    ep_weights[ep_var] = var_weight
+                    weight_prod *= var_weight
+
+                if len(ep_weights) == len(ep_weight_filler_mapping):
+                    group_2_ep_weights_list.append(ep_weights)
+                    group_2_weight_prod_list.append(weight_prod)
+
+            for ep_weights, weight_prod in sorted(
+                    zip(group_2_ep_weights_list, group_2_weight_prod_list),
+                    key=itemgetter(1), reverse=True):
+                ep_fillers = ep_weights_to_ep_fillers(ep_weights)
+
+                print('Found {} filler combinations with weight {} (group #2)'.format(
+                    len(ep_fillers), weight_prod))
+
+                fillers_list.extend(ep_fillers)
+                weight_list.extend([weight_prod] * len(ep_fillers))
+
+                if len(fillers_list) >= earlycutoff:
+                    break
+
+        # Group 3 (all-but-one highest & one third-highest,
+        # or all-but-two highest & two second-highest)
+        if len(fillers_list) < earlycutoff:
+            group_3_ep_weights_list = []
+            group_3_weight_prod_list = []
+
+            # For each entry point, select its third-highest weighted fillers
+            for idx in range(len(ep_weight_filler_mapping)):
+                ep_weights = {}
+                weight_prod = 1.0
+                for ep_var_idx, (ep_var, weight_filler_mapping) in enumerate(
+                        ep_weight_filler_mapping.items()):
+                    if ep_var_idx == idx:
+                        if len(weight_filler_mapping) < 3:
+                            continue
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[2]
+                    else:
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[0]
+
+                    ep_weights[ep_var] = var_weight
+                    weight_prod *= var_weight
+
+                if len(ep_weights) == len(ep_weight_filler_mapping):
+                    group_3_ep_weights_list.append(ep_weights)
+                    group_3_weight_prod_list.append(weight_prod)
+
+            # For each combination of 2 entry points, select their second-highest weighted fillers
+            for idx_1, idx_2 in itertools.combinations(range(len(ep_weight_filler_mapping)), 2):
+                ep_weights = {}
+                weight_prod = 1.0
+                for ep_var_idx, (ep_var, weight_filler_mapping) in enumerate(
+                        ep_weight_filler_mapping.items()):
+                    if ep_var_idx == idx_1 or ep_var_idx == idx_2:
+                        if len(weight_filler_mapping) < 2:
+                            continue
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[1]
+                    else:
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[0]
+
+                    ep_weights[ep_var] = var_weight
+                    weight_prod *= var_weight
+
+                if len(ep_weights) == len(ep_weight_filler_mapping):
+                    group_3_ep_weights_list.append(ep_weights)
+                    group_3_weight_prod_list.append(weight_prod)
+
+            for ep_weights, weight_prod in sorted(
+                    zip(group_3_ep_weights_list, group_3_weight_prod_list),
+                    key=itemgetter(1), reverse=True):
+                ep_fillers = ep_weights_to_ep_fillers(ep_weights)
+
+                print('Found {} filler combinations with weight {} (group #3)'.format(
+                    len(ep_fillers), weight_prod))
+
+                fillers_list.extend(ep_fillers)
+                weight_list.extend([weight_prod] * len(ep_fillers))
+
+                if len(fillers_list) >= earlycutoff:
+                    break
+
+        # Group 4 (all-but-one highest & one forth-highest,
+        # or all-but-two highest & one second-highest & one third-highest,
+        # or all-but-three highest & three second-highest)
+        if len(fillers_list) < earlycutoff:
+            group_4_ep_weights_list = []
+            group_4_weight_prod_list = []
+
+            # For each entry point, select its forth-highest weighted fillers
+            for idx in range(len(ep_weight_filler_mapping)):
+                ep_weights = {}
+                weight_prod = 1.0
+                for ep_var_idx, (ep_var, weight_filler_mapping) in enumerate(
+                        ep_weight_filler_mapping.items()):
+                    if ep_var_idx == idx:
+                        if len(weight_filler_mapping) < 4:
+                            continue
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[3]
+                    else:
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[0]
+
+                    ep_weights[ep_var] = var_weight
+                    weight_prod *= var_weight
+
+                if len(ep_weights) == len(ep_weight_filler_mapping):
+                    group_4_ep_weights_list.append(ep_weights)
+                    group_4_weight_prod_list.append(weight_prod)
+
+            # For each permutation of 2 entry points, select the third-highest weighted fillers for one of them
+            # and the second-highest weighted fillers for the other
+            for idx_1, idx_2 in itertools.permutations(range(len(ep_weight_filler_mapping)), 2):
+                ep_weights = {}
+                weight_prod = 1.0
+                for ep_var_idx, (ep_var, weight_filler_mapping) in enumerate(
+                        ep_weight_filler_mapping.items()):
+                    if ep_var_idx == idx_1:
+                        if len(weight_filler_mapping) < 3:
+                            continue
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[2]
+                    elif ep_var_idx == idx_2:
+                        if len(weight_filler_mapping) < 2:
+                            continue
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[1]
+                    else:
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[0]
+
+                    ep_weights[ep_var] = var_weight
+                    weight_prod *= var_weight
+
+                if len(ep_weights) == len(ep_weight_filler_mapping):
+                    group_4_ep_weights_list.append(ep_weights)
+                    group_4_weight_prod_list.append(weight_prod)
+
+            # For each combination of 3 entry points, select their second-highest weighted fillers
+            for idx_1, idx_2, idx_3 in itertools.combinations(range(len(ep_weight_filler_mapping)), 3):
+                ep_weights = {}
+                weight_prod = 1.0
+                for ep_var_idx, (ep_var, weight_filler_mapping) in enumerate(
+                        ep_weight_filler_mapping.items()):
+                    if ep_var_idx == idx_1 or ep_var_idx == idx_2 or ep_var_idx == idx_3:
+                        if len(weight_filler_mapping) < 2:
+                            continue
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[1]
+                    else:
+                        var_weight = sorted(weight_filler_mapping.keys(), reverse=True)[0]
+
+                    ep_weights[ep_var] = var_weight
+                    weight_prod *= var_weight
+
+                if len(ep_weights) == len(ep_weight_filler_mapping):
+                    group_4_ep_weights_list.append(ep_weights)
+                    group_4_weight_prod_list.append(weight_prod)
+
+            for ep_weights, weight_prod in sorted(
+                    zip(group_4_ep_weights_list, group_4_weight_prod_list),
+                    key=itemgetter(1), reverse=True):
+                ep_fillers = ep_weights_to_ep_fillers(ep_weights)
+
+                print('Found {} filler combinations with weight {} (group #3)'.format(
+                    len(ep_fillers), weight_prod))
+
+                fillers_list.extend(ep_fillers)
+                weight_list.extend([weight_prod] * len(ep_fillers))
+
+                if len(fillers_list) >= earlycutoff:
+                    break
+
+        for fillers, weight in zip(fillers_list, weight_list):
+            yield(fillers, weight)
+
+
     #########################
     #########################
     # TEMPORAL ANALYSIS
