@@ -14,7 +14,7 @@
             holgate@utexas.edu
 """
 
-from pipeline.soin_processing.templates_and_constants import DEBUG, SCORE_WEIGHTS, DEBUG_SCORE_FLOOR, ROLE_PENALTY_DEBUG
+from templates_and_constants import DEBUG, SCORE_WEIGHTS, DEBUG_SCORE_FLOOR, ROLE_PENALTY_DEBUG
 
 import sys
 import json
@@ -434,7 +434,7 @@ def main():
         s_count += 1
         print("Processing SOIN " + str(s_count) + " of " + str(len(soins)))
         print("\tParsing SOIN XML...")
-        soin = SOIN.process_xml(args.soin_in + s)
+        soin = SOIN.process_xml(os.path.join(args.soin_in, s), dup_kbid_mapping=dup_kbid_mapping)
         print("\t\tDone.\n")
 
 
@@ -481,7 +481,7 @@ def main():
         print("\t\tDone.\n")
 
         print("\tWriting output...")
-        with open(args.out_path + s.strip('.xml') + '_query.json', 'w') as out:
+        with open(os.path.join(args.out_path, s.strip('.xml') + '_query.json'), 'w') as out:
             json.dump(write_me, out, indent=1)
         print("\t\tDone.\n")
 
