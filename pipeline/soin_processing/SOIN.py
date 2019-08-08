@@ -196,7 +196,7 @@ class SOIN:
         return temporal_dict
 
 
-def process_xml(in_path):
+def process_xml(in_path, dup_kbid_mapping=None):
     """
     This function will process the XML input and retrieve:
         (1) The specified frames
@@ -424,6 +424,7 @@ def process_xml(in_path):
                                             _LOG.log(50,
                                                      'Process SOIN: Unexpected tag {} encountered'.format(info.tag))
                                             raise UnexpectedXMLTag
+                                    kb_descriptor_dict['dup_kbid_mapping'] = dup_kbid_mapping
                                     typed_descriptor_dict['descriptor'] = KBDescriptor(**kb_descriptor_dict)
 
                                 else:

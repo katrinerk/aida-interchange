@@ -446,9 +446,11 @@ class ImageDescriptor:
 
 
 class KBDescriptor:
-    def __init__(self, kbid):
+    def __init__(self, kbid, dup_kbid_mapping=None):
         self.descriptor_type = "KB"
-        self.kbid = kbid
+        self.kbid = [kbid]
+        if kbid in dup_kbid_mapping:
+            self.kbid.append(dup_kbid_mapping[kbid])
 
     def __str__(self):
         return self.__repr__()
@@ -466,7 +468,7 @@ class KBDescriptor:
 
         link_value = next(iter(link_value_set)).value.strip()
 
-        if self.kbid == link_value:
+        if link_value in self.kbid:
             return 100
 
         return 0

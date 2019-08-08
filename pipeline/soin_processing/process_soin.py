@@ -410,10 +410,18 @@ def main():
                         action='store_true',
                         default=False,
                         help='This flag tells the program to consider role information')
+    parser.add_argument('--dup_kb', default=None, help='path to the json file with duplicate KB ID mappings')
+
     args = parser.parse_args()
 
     if not(os.path.exists(args.out_path)):
         os.mkdir(args.out_path)
+
+    dup_kbid_mapping = None
+    if args.dup_kb is not None:
+        print("Loading duplicate KB ID mapping from {}...".format(args.dup_kb))
+        with open(args.dup_kb, 'r') as fin:
+            dup_kbid_mapping = json.load(fin)
 
     print("Loading Graph...")
     graph = load_graph(args.graph_in)
