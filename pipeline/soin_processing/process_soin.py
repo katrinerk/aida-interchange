@@ -159,13 +159,7 @@ def get_kb_link_node(graph, typing_statement):
     if not subject_node:
         return False
     link_id_set = subject_node.get('link')
-    if not link_id_set:
-        return False
-    link_node = graph.get_node(next(iter(link_id_set)))
-    if not link_node:
-        return False
-
-    return link_node
+    return [graph.get_node(link_id) for link_id in link_id_set]
 
 
 def get_bounding_box_node(graph, justification_node):
@@ -244,10 +238,14 @@ def check_descriptor(graph, typing_statement, typed_descriptor):
         return typed_descriptor.descriptor.evaluate_node(justification_node, bounding_box_node)
 
     elif typed_descriptor.descriptor.descriptor_type == "KB":
-        link_node = get_kb_link_node(graph, typing_statement)
-        if not link_node:
+        link_node_scores = []
+        for link_node in get_kb_link_node(graph, typing_statement):
+            link_node_scores.append(typed_descriptor.descriptor.evaluate_node(link_node))
+
+        if not link_node_scores:
             return False
-        return typed_descriptor.descriptor.evaluate_node(link_node)
+        else:
+            return max(link_node_scores)
 
     return False
 
