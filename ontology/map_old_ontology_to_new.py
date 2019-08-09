@@ -1,8 +1,9 @@
 import json
+import sys
 from pathlib import Path
 from typing import Dict
+
 from rdflib.namespace import split_uri
-import sys
 
 
 def process_file(input_path: Path, output_path: Path, ontology_mapping: Dict):
@@ -80,4 +81,7 @@ if __name__ == '__main__':
     with open('old_to_new_ontology_mapping.json', 'r') as fin:
         ontology_mapping = json.load(fin)
 
-    process_directory(input_path, output_path, ontology_mapping)
+    if input_path.is_file():
+        process_file(input_path, output_path, ontology_mapping)
+    else:
+        process_directory(input_path, output_path, ontology_mapping)
