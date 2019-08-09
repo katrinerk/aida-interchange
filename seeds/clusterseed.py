@@ -588,10 +588,47 @@ class ClusterSeeds:
         print("Initializing cluster seeds (if stalled, set earlycutoff)")
         # initialize deque with one core hypothesis per facet
         for facet in self.soin_obj["facets"]:
+            reranked_entrypoints = {}
+            reranked_entrypoint_weights = {}
+
+            for ep_var, ep_fillers in self.soin_obj['entrypoints'].items():
+                ep_weights = self.soin_obj['entrypointWeights'][ep_var]
+
+                print('Entry point: {}'.format(ep_var))
+
+                filler_weight_mapping = {}
+
+                fillers_filtered_both = []
+                fillers_filtered_role_score = []
+
+                for ep_filler, ep_weight in zip(ep_fillers, ep_weights):
+                    ep_role_score = self._entrypoint_filler_rolescore(ep_var, ep_filler, facet)
+                    filler_weight_mapping[ep_filler] = (ep_weight, ep_role_score)
+                    if ep_role_score > 0:
+                        fillers_filtered_role_score.append(ep_filler)
+                        if ep_weight > 50.0:
+                            fillers_filtered_both.append(ep_filler)
+
+                if len(fillers_filtered_both) > 0:
+                    print('\tKept {} fillers with both SoIN weight > 50 and role score > 0'.format(len(fillers_filtered_both)))
+                    reranked_entrypoints[ep_var] = fillers_filtered_both
+                    reranked_entrypoint_weights[ep_var] = [
+                        filler_weight_mapping[filler][0] * filler_weight_mapping[filler][1]
+                        for filler in fillers_filtered_both]
+                elif len(fillers_filtered_role_score) > 0:
+                    print('\tKept {} fillers with role score > 0'.format(len(fillers_filtered_role_score)))
+                    reranked_entrypoints[ep_var] = fillers_filtered_role_score
+                    reranked_entrypoint_weights[ep_var] = [
+                        filler_weight_mapping[filler][0] * filler_weight_mapping[filler][1]
+                        for filler in fillers_filtered_role_score]
+                else:
+                    print('\tKept all {} fillers (no filler has role score > 0)'.format(len(ep_fillers)))
+                    reranked_entrypoints[ep_var] = ep_fillers
+                    reranked_entrypoint_weights[ep_var] = ep_weights
 
             index = 0
             if self.earlycutoff is None:
-                for qvar_filler, entrypoint_weight in self._each_entry_point_combination(self.soin_obj["entrypoints"], self.soin_obj["entrypointWeights"], facet):
+                for qvar_filler, entrypoint_weight in self._each_entry_point_combination(reranked_entrypoints, reranked_entrypoint_weights, facet):
                     ## print("entry points")
                     ## for q, f in qvar_filler.items():
                     ##     print(q, f[-5:])
@@ -609,7 +646,7 @@ class ClusterSeeds:
                     hypotheses_todo.append(core_hyp)
             else:
                 for qvar_filler, entrypoint_weight in self._each_entry_point_combination_w_early_cutoff(
-                        self.soin_obj["entrypoints"], self.soin_obj["entrypointWeights"], facet, earlycutoff=self.earlycutoff):
+                        reranked_entrypoints, reranked_entrypoint_weights, facet, earlycutoff=self.earlycutoff):
                     # start a new hypothesis
                     core_hyp = OneClusterSeed(self.graph_obj, facet["queryConstraints"], self._pythonize_datetime(facet.get("temporal", {})), \
                                                   AidaHypothesis(self.graph_obj), qvar_filler, entrypointweight = entrypoint_weight,
