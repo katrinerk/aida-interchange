@@ -69,7 +69,15 @@ class AidaHypothesis:
         return new_hypothesis
 
     def copy(self):
-        return AidaHypothesis(self.graph_obj, stmts = self.stmts.copy(), core_stmts = self.core_stmts.copy(), stmt_weights = self.stmt_weights.copy())
+        new_hypothesis = AidaHypothesis(
+            self.graph_obj,
+            stmts = self.stmts.copy(),
+            core_stmts = self.core_stmts.copy(),
+            stmt_weights = self.stmt_weights.copy(),
+            lweight=self.lweight
+        )
+        new_hypothesis.add_failed_queries(self.failed_queries)
+        return new_hypothesis
 
     #########3
     # give weights to type statements in this hypothesis:
