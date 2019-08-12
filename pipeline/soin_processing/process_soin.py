@@ -13,6 +13,7 @@
     Author: Eric Holgate
             holgate@utexas.edu
 """
+from collections import defaultdict
 
 from templates_and_constants import DEBUG, SCORE_WEIGHTS, DEBUG_SCORE_FLOOR, ROLE_PENALTY_DEBUG
 
@@ -60,7 +61,7 @@ def load_graph(in_dir):
 
 def get_cluster_mappings(graph):
     cluster_to_prototype = {}
-    entities_to_clusters = {}
+    entities_to_clusters = defaultdict(set)
     entities_to_roles = {}
 
     for node in graph.nodes():
@@ -69,7 +70,7 @@ def get_cluster_mappings(graph):
         elif node.is_cluster_membership():
             cluster_member = next(iter(node.get('clusterMember')))
             cluster = next(iter(node.get('cluster')))
-            entities_to_clusters[cluster_member] = cluster
+            entities_to_clusters[cluster_member].add(cluster)
         elif node.is_statement():
             pred_set = node.get('predicate', shorten=True)
             if not pred_set:
@@ -299,7 +300,7 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
 
             subject_address = next(iter(node.get('subject')))
             try:
-                prototype = cluster_to_prototype[entity_to_cluster[subject_address]]
+                prototypes = [cluster_to_prototype[cluster] for cluster in entity_to_cluster[subject_address]]
             except KeyError:
                 if DEBUG:
                     print("KEY ERROR IN PROTOTYPE MAPPINGS!!")
@@ -348,28 +349,38 @@ def find_entrypoint(graph, entrypoint, cluster_to_prototype, entity_to_cluster, 
                 if (total_score >= DEBUG_SCORE_FLOOR):
                     input()
 
-            if total_score in results:
-                results[total_score].add((total_score, prototype))
-            else:
-                results[total_score] = {(total_score, prototype)}
+            for prototype in prototypes:
+                if prototype in results:
+                    prev_score = results[prototype]
+                    if total_score > prev_score:
+                        results[prototype] = total_score
+                else:
+                    results[prototype] = total_score
+            # if total_score in results:
+            #     results[total_score].update([(total_score, prototype) for prototype in prototypes])
+            # else:
+            #     results[total_score] = set([(total_score, prototype) for prototype in prototypes])
 
-    set_of_nodes = set()
-    return_count = 0
-    scores_sorted = sorted(results.keys(), reverse=True)
-    for score in scores_sorted:
-        for node in results[score]:
-            if return_count >= ep_cap:
-                break
-            elif node not in set_of_nodes:
-                return_count += 1
-                set_of_nodes.add(node)
+    sorted_results = sorted(results.items(), key=lambda x: x[1], reverse=True)
+    ep_list, ep_weight_list = zip(*sorted_results[:ep_cap])
 
-    ordered_list = sorted(list(set_of_nodes), key=lambda x: x[0], reverse=True)
-    ep_list = []
-    ep_weight_list = []
-    for elem in ordered_list:
-        ep_list.append(elem[1])
-        ep_weight_list.append(elem[0])
+    # set_of_nodes = set()
+    # return_count = 0
+    # scores_sorted = sorted(results.keys(), reverse=True)
+    # for score in scores_sorted:
+    #     for node in results[score]:
+    #         if return_count >= ep_cap:
+    #             break
+    #         elif node not in set_of_nodes:
+    #             return_count += 1
+    #             set_of_nodes.add(node)
+
+    # ordered_list = sorted(list(set_of_nodes), key=lambda x: x[0], reverse=True)
+    # ep_list = []
+    # ep_weight_list = []
+    # for elem in ordered_list:
+    #     ep_list.append(elem[1])
+    #     ep_weight_list.append(elem[0])
     return ep_list, ep_weight_list
 
 
