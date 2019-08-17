@@ -1,7 +1,6 @@
 import json
 import sys
 from argparse import ArgumentParser
-from collections import defaultdict
 from operator import itemgetter
 from os.path import dirname, realpath
 from pathlib import Path
@@ -10,7 +9,7 @@ src_path = dirname(dirname(dirname(realpath(__file__))))
 sys.path.insert(0, src_path)
 
 from pipeline.sparql_helper import *
-
+from pipeline.json_graph_helper import build_cluster_member_mappings
 
 AIF_HEADER_PREFIXES = \
     '@prefix ldcOnt: <https://tac.nist.gov/tracks/SM-KBP/2019/ontologies/LDCOntology#> .\n' \
@@ -18,7 +17,6 @@ AIF_HEADER_PREFIXES = \
     '@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .\n' \
     '@prefix aida:  <https://tac.nist.gov/tracks/SM-KBP/2019/ontologies/InterchangeOntology#> .\n' \
     '@prefix ldc:   <https://tac.nist.gov/tracks/SM-KBP/2019/ontologies/LdcAnnotations#> .\n'
-
 
 QUERY_PREFIXES = \
     'PREFIX ldcOnt: <https://tac.nist.gov/tracks/SM-KBP/2019/ontologies/LDCOntology#>\n' \
@@ -28,33 +26,10 @@ QUERY_PREFIXES = \
     'PREFIX ldc:   <https://tac.nist.gov/tracks/SM-KBP/2019/ontologies/LdcAnnotations#>\n'
 
 
-def build_member_cluster_mappings(graph_json):
-    member_to_clusters = defaultdict(set)
-
-    for node_label, node in graph_json['theGraph'].items():
-        if node['type'] == 'ClusterMembership':
-            cluster = node.get('cluster', None)
-            member = node.get('clusterMember', None)
-            assert cluster is not None and member is not None
-
-            member_to_clusters[member].add(cluster)
-
-    num_clusters = len(set([c for clusters in member_to_clusters.values() for c in clusters]))
-    num_members = len(member_to_clusters)
-
-    print('\nConstructed mapping from {} members to {} clusters'.format(
-        num_members, num_clusters,))
-
-    return member_to_clusters
-
-
 def queries_for_aida_result(
-        graph_json, hypothesis, num_node_queries=5, num_stmts_per_query=3000,
+        graph_json, hypothesis, member_to_clusters, cluster_to_prototype, prototype_set,
+        num_node_queries=5, num_stmts_per_query=3000,
         query_just=False, query_conf=False):
-    member_to_clusters = build_member_cluster_mappings(graph_json)
-
-    just_query_suffix = 'FILTER isIRI(?x)'
-
     ere_id_list = []
 
     ere_query_item_list = []
@@ -62,6 +37,9 @@ def queries_for_aida_result(
     stmt_query_item_list = []
     just_query_item_list = []
     conf_query_item_list = []
+
+    # Extract all aida:system definitions.
+    stmt_query_item_list.append('{?x a aida:System .}')
 
     for stmt in hypothesis['statements']:
         stmt_entry = graph_json['theGraph'][stmt]
@@ -133,6 +111,10 @@ def queries_for_aida_result(
             #         subject_id, predicate_id, object_id))
 
         else:
+            # Exclude typing statements of non-prototype members to reduce file size
+            # if subject_id not in prototype_set:
+            #     continue
+
             stmt_constraint = \
                 '?x a rdf:Statement .\n?x rdf:subject <{}> .\n?x rdf:predicate rdf:type .\n' \
                 '?x rdf:object <{}> .'.format(subject_id, object_id)
@@ -184,7 +166,6 @@ def queries_for_aida_result(
                 '?j aida:confidence ?c .\n'
                 '}}'.format(ere_id))
 
-
         for cluster_id in member_to_clusters[ere_id]:
             cluster_query_item_list.append('<{}>'.format(cluster_id))
 
@@ -215,6 +196,64 @@ def queries_for_aida_result(
                     '?x aida:clusterMember <{}> .\n'
                     '?x aida:confidence ?c .\n'
                     '}}'.format(cluster_id, ere_id))
+
+            # Always add the prototype member of the clusters included in the hypothesis.
+            prototype_id = cluster_to_prototype[cluster_id]
+            ere_query_item_list.append('<{}>'.format(prototype_id))
+
+            # Add the informative justification of the prototype if needed.
+            if query_just:
+                just_query_item_list.append(
+                    '{{<{}> aida:informativeJustification ?j .}}'.format(prototype_id))
+            # Add the confidence node of the informative justification of the prototype if needed
+            if query_conf:
+                conf_query_item_list.append(
+                    '{{\n'
+                    '<{}> aida:informativeJustification ?j .\n'
+                    '?j aida:confidence ?c .\n'
+                    '}}'.format(prototype_id))
+
+            # Also add the ClusterMembership nodes for the prototype.
+            for proto_cluster_id in member_to_clusters[prototype_id]:
+                stmt_query_item_list.append(
+                    '{{?x a aida:ClusterMembership .\n'
+                    '?x aida:cluster <{}> .\n'
+                    '?x aida:clusterMember <{}> .\n'
+                    '}}'.format(proto_cluster_id, prototype_id))
+
+                # And the confidence node of the ClusterMembership node if needed
+                if query_conf:
+                    conf_query_item_list.append(
+                        '{{?x a aida:ClusterMembership .\n'
+                        '?x aida:cluster <{}> .\n'
+                        '?x aida:clusterMember <{}> .\n'
+                        '?x aida:confidence ?c .\n'
+                        '}}'.format(proto_cluster_id, prototype_id))
+
+            # Also add the typing statement for the prototype.
+            proto_stmt_constraint = \
+                '?x a rdf:Statement .\n?x rdf:subject <{}> .\n?x rdf:predicate rdf:type .'.format(
+                    prototype_id)
+
+            stmt_query_item_list.append('{{\n{}\n}}'.format(proto_stmt_constraint))
+
+            if query_just:
+                just_query_item_list.append(
+                    '{{\n{}\n'
+                    '?x aida:justifiedBy ?j .\n'
+                    '}}'.format(proto_stmt_constraint))
+
+            if query_conf:
+                conf_query_item_list.append(
+                    '{{\n{}\n'
+                    '?x aida:confidence ?c .\n'
+                    '}}'.format(proto_stmt_constraint))
+
+                conf_query_item_list.append(
+                    '{{\n{}\n'
+                    '?x aida:justifiedBy ?j .\n'
+                    '?j aida:confidence ?c .\n'
+                    '}}'.format(proto_stmt_constraint))
 
     node_query_item_list = list(set(ere_query_item_list)) + list(set(cluster_query_item_list))
     stmt_query_item_list = list(set(stmt_query_item_list))
@@ -260,6 +299,11 @@ def main():
     with open(graph_json_path, 'r') as fin:
         graph_json = json.load(fin)
 
+    mappings = build_cluster_member_mappings(graph_json)
+    member_to_clusters = mappings['member_to_clusters']
+    cluster_to_prototype = mappings['cluster_to_prototype']
+    prototype_set = set(mappings['prototype_to_clusters'].keys())
+
     hypotheses_json_path = Path(args.hypotheses_json_path)
     assert hypotheses_json_path.exists(), '{} does not exist'.format(hypotheses_json_path)
     print('Reading the hypotheses from {}'.format(hypotheses_json_path))
@@ -288,6 +332,9 @@ def main():
             queries_for_aida_result(
                 graph_json=graph_json,
                 hypothesis=hypothesis,
+                member_to_clusters=member_to_clusters,
+                cluster_to_prototype=cluster_to_prototype,
+                prototype_set=prototype_set,
                 num_node_queries=num_node_queries,
                 query_just=args.query_just,
                 query_conf=args.query_conf)

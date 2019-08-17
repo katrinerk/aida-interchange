@@ -104,18 +104,25 @@ def main():
         hypothesis_id = '{}_hypothesis_{:0>3d}'.format(frame_id, top_count)
 
         hypothesis_name = 'utexas:{}'.format(hypothesis_id)
+        subgraph_name = hypothesis_name + '_subgraph'
 
         update_query_count = 0
 
+        # Build an update query to add aida:Hypothesis and its importance values, as well as
+        # the importance values for all event and relation clusters.
         update_str = update_prefix + 'INSERT DATA\n{\n'
-        update_str += '  {} rdf:type aida:Hypothesis .\n'.format(hypothesis_name)
-        update_str += '  {} aida:importance {:.4f} .\n'.format(hypothesis_name, hyp_weight)
+        update_str += '  {} a aida:Hypothesis .\n'.format(hypothesis_name)
+        update_str += '  {} aida:importance "{:.4f}"^^xsd:double .\n'.format(
+            hypothesis_name, hyp_weight)
+        update_str += '  {} aida:hypothesisContent {} .\n'.format(hypothesis_name, subgraph_name)
+        update_str += '  {} a aida:Subgraph .\n'.format(subgraph_name)
 
         stmt_importance, node_importance = compute_importance_mapping(
             graph_json, hypothesis, member_to_clusters)
 
         for node_id, importance_value in node_importance.items():
-            update_str += '  <{}> aida:importance {:.4f} .\n'.format(node_id, importance_value)
+            update_str += '  <{}> aida:importance "{:.4f}"^^xsd:double .\n'.format(
+                node_id, importance_value)
 
         update_str += '}'
 
@@ -127,10 +134,32 @@ def main():
 
         update_query_count += 1
 
+        # Build an update query for the aida:subgraphContains field of the aida:Subgraph node as
+        # the aida:hypothesisContent. We just include all ERE nodes for simplicity, as it's not
+        # required that all KEs should be included for NIST to evaluate in M18.
+        update_str = update_prefix
+        update_str += \
+            'INSERT {{\n' \
+            '{} aida:subgraphContains ?e .\n' \
+            '}}\nWHERE\n{{\n' \
+            '{{ ?e a aida:Entity }}\nUNION\n' \
+            '{{ ?e a aida:Relation }}\nUNION\n' \
+            '{{ ?e a aida:Event }}\n}}\n'.format(subgraph_name)
+
+        output_path = output_dir / 'hypothesis-{:0>3d}-update-{:0>4d}.rq'.format(
+            top_count, update_query_count)
+        with open(output_path, 'w') as fout:
+            fout.write(update_str)
+
+        update_query_count += 1
+
+        # Build an update query for the importance value of each statement. We would need
+        # a separate query for each statement, because we need to use the INSERT {} WHERE {}
+        # operator here to allow BNode statements.
         for (stmt_subj, stmt_pred, stmt_obj), importance_value in stmt_importance.items():
             update_str = update_prefix
             update_str += \
-                'INSERT {{ ?x aida:importance {:.4f} . }}\n' \
+                'INSERT {{ ?x aida:importance "{:.4f}"^^xsd:double . }}\n' \
                 'WHERE\n{{\n' \
                 '?x a rdf:Statement .\n' \
                 '?x rdf:subject <{}> .\n' \

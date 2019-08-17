@@ -15,20 +15,29 @@ update_prefix = \
 
 
 def compute_handle_mapping(graph_json, hypothesis, member_to_clusters):
-    cluster_handles = {}
+    cluster_set = set()
 
     for stmt_label in hypothesis['statements']:
 
         stmt_entry = graph_json['theGraph'][stmt_label]
 
+        stmt_subj = stmt_entry.get('subject', None)
         stmt_obj = stmt_entry.get('object', None)
-        assert stmt_obj is not None
+        assert stmt_subj is not None and stmt_obj is not None
+
+        if stmt_subj in graph_json['theGraph']:
+            if graph_json['theGraph'][stmt_subj]['type'] == 'Entity':
+                for cluster in member_to_clusters[stmt_subj]:
+                    cluster_set.add(cluster)
 
         if stmt_obj in graph_json['theGraph']:
             if graph_json['theGraph'][stmt_obj]['type'] == 'Entity':
                 for cluster in member_to_clusters[stmt_obj]:
-                    if cluster not in cluster_handles:
-                        cluster_handles[cluster] = graph_json['theGraph'][cluster]['handle']
+                    cluster_set.add(cluster)
+
+    cluster_handles = {}
+    for cluster in cluster_set:
+        cluster_handles[cluster] = graph_json['theGraph'][cluster]['handle']
 
     return cluster_handles
 
