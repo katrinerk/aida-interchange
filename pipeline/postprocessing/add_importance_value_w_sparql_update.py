@@ -1,9 +1,10 @@
 import json
 import math
 from argparse import ArgumentParser
-from collections import defaultdict
 from operator import itemgetter
 from pathlib import Path
+
+from pipeline.json_graph_helper import build_cluster_member_mappings
 
 update_prefix = \
     'PREFIX ldcOnt: <https://tac.nist.gov/tracks/SM-KBP/2019/ontologies/LDCOntology#>\n' \
@@ -12,26 +13,6 @@ update_prefix = \
     'PREFIX aida:  <https://tac.nist.gov/tracks/SM-KBP/2019/ontologies/InterchangeOntology#>\n' \
     'PREFIX ldc:   <https://tac.nist.gov/tracks/SM-KBP/2019/ontologies/LdcAnnotations#>\n' \
     'PREFIX utexas: <http://www.utexas.edu/aida/>\n\n'
-
-
-def build_member_cluster_mappings(graph_json):
-    member_to_clusters = defaultdict(set)
-
-    for node_label, node in graph_json['theGraph'].items():
-        if node['type'] == 'ClusterMembership':
-            cluster = node.get('cluster', None)
-            member = node.get('clusterMember', None)
-            assert cluster is not None and member is not None
-
-            member_to_clusters[member].add(cluster)
-
-    num_clusters = len(set([c for clusters in member_to_clusters.values() for c in clusters]))
-    num_members = len(member_to_clusters)
-
-    print('\nConstructed mapping from {} members to {} clusters'.format(
-        num_members, num_clusters, ))
-
-    return member_to_clusters
 
 
 def compute_importance_mapping(graph_json, hypothesis, member_to_clusters):
@@ -89,7 +70,7 @@ def main():
     with open(graph_json_path, 'r') as fin:
         graph_json = json.load(fin)
 
-    member_to_clusters = build_member_cluster_mappings(graph_json)
+    member_to_clusters = build_cluster_member_mappings(graph_json)['member_to_clusters']
 
     hypotheses_json_path = Path(args.hypotheses_json_path)
     assert hypotheses_json_path.exists(), '{} does not exist'.format(hypotheses_json_path)

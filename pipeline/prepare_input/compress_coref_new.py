@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 from collections import defaultdict, Counter
 from os.path import dirname, realpath
 from pathlib import Path
+from pipeline.json_graph_helper import build_cluster_member_mappings
 
 src_path = dirname(dirname(dirname(realpath(__file__))))
 sys.path.insert(0, src_path)
@@ -39,111 +40,8 @@ def make_stmt_keys(stmt_entry, member_to_prototypes):
 
 
 def build_mappings(input_graph_json):
-    # Build mappings between clusters and members, and mappings between
-    # clusters and prototypes
-    cluster_to_members = defaultdict(set)
-    member_to_clusters = defaultdict(set)
-    cluster_membership_key_mapping = {}
-
-    cluster_to_prototype = {}
-    prototype_to_clusters = defaultdict(set)
-
-    for node_label, node in input_graph_json['theGraph'].items():
-        if node['type'] == 'ClusterMembership':
-            cluster = node.get('cluster', None)
-            member = node.get('clusterMember', None)
-            assert cluster is not None and member is not None
-
-            cluster_to_members[cluster].add(member)
-            member_to_clusters[member].add(cluster)
-
-            assert (cluster, member) not in cluster_membership_key_mapping
-            cluster_membership_key_mapping[(cluster, member)] = node_label
-
-        elif node['type'] == 'SameAsCluster':
-            assert node_label not in cluster_to_prototype
-
-            prototype = node.get('prototype', None)
-            assert prototype is not None
-
-            cluster_to_prototype[node_label] = prototype
-            prototype_to_clusters[prototype].add(node_label)
-
-    num_clusters = len(cluster_to_members)
-    num_members = len(member_to_clusters)
-    num_prototypes = len(prototype_to_clusters)
-    assert len(cluster_to_prototype) == num_clusters
-
-    print('\nConstructed mapping from {} clusters to {} members'.format(
-        num_clusters, num_members))
-
-    clusters_per_member_counter = Counter(
-        [len(v) for v in member_to_clusters.values()])
-    for key in sorted(clusters_per_member_counter.keys()):
-        if key > 1:
-            print(
-                '\tFor {} out of {} members, each belong to {} clusters'.format(
-                    clusters_per_member_counter[key], num_members, key))
-
-    print('\nConstructed mapping from {} clusters to {} prototypes'.format(
-        num_clusters, num_prototypes))
-
-    clusters_per_prototype_counter = Counter(
-        [len(v) for v in prototype_to_clusters.values()])
-    for key in sorted(clusters_per_prototype_counter.keys()):
-        if key > 1:
-            print(
-                '\tFor {} out of {} prototypes, each is the prototype of {} '
-                'clusters'.format(
-                    clusters_per_prototype_counter[key], num_prototypes, key))
-
-    # Build mappings between members and prototypes, using the above
-    # constructed mappings
-    member_to_prototypes = defaultdict(set)
-    prototype_to_members = defaultdict(set)
-
-    for member, clusters in member_to_clusters.items():
-        assert member not in member_to_prototypes
-        for cluster in clusters:
-            prototype = cluster_to_prototype[cluster]
-            member_to_prototypes[member].add(prototype)
-            prototype_to_members[prototype].add(member)
-
-    assert len(member_to_prototypes) == num_members
-    assert len(prototype_to_members) == num_prototypes
-
-    print('\nConstructed mapping from {} members to {} prototypes'.format(
-        num_members, num_prototypes))
-
-    prototypes_per_member_counter = Counter(
-        [len(v) for v in member_to_prototypes.values()])
-    for key in sorted(prototypes_per_member_counter.keys()):
-        if key > 1:
-            print(
-                '\tFor {} out of {} members, each is mapped to {} '
-                'prototypes'.format(
-                    prototypes_per_member_counter[key], num_members, key))
-
-    # Add ERE nodes that are not connected to any ClusterMembership node to
-    # the mappings between members and prototypes. This shouldn't happen,
-    # unless the TA2 output we get don't conform to the NIST-restricted
-    # formatting requirements.
-    ere_nodes_not_in_clusters = set()
-    for node_label, node in input_graph_json['theGraph'].items():
-        if node['type'] in ['Entity', 'Relation', 'Event']:
-            if node_label not in member_to_prototypes:
-                ere_nodes_not_in_clusters.add(node_label)
-    if len(ere_nodes_not_in_clusters) > 0:
-        print('\nWarning: Found {} ERE nodes that are not connected to any '
-              'ClusterMembership node'.format(len(ere_nodes_not_in_clusters)))
-        print('Adding them to the mappings between members and prototypes')
-        for node_label in ere_nodes_not_in_clusters:
-            member_to_prototypes[node_label].add(node_label)
-            prototype_to_members[node_label].add(node_label)
-        print(
-            '\nAfter correction, constructed mapping from {} members to '
-            '{} prototypes'.format(
-                len(member_to_prototypes), len(prototype_to_members)))
+    # Build mappings among clusters, members, and prototypes
+    mappings = build_cluster_member_mappings(input_graph_json)
 
     # Build mappings from old statement labels to new statement labels
     stmt_count = 0
@@ -156,7 +54,7 @@ def build_mappings(input_graph_json):
     for node_label, node in input_graph_json['theGraph'].items():
         if node['type'] == 'Statement':
             stmt_keys = make_stmt_keys(
-                stmt_entry=node, member_to_prototypes=member_to_prototypes)
+                stmt_entry=node, member_to_prototypes=mappings['member_to_prototypes'])
             for stmt_key in stmt_keys:
                 if stmt_key not in stmt_key_to_new_stmt:
                     new_stmt_label = 'Statement-{}'.format(stmt_count)
@@ -189,19 +87,12 @@ def build_mappings(input_graph_json):
                 'statements'.format(
                     new_stmts_per_old_stmt_counter[key], num_old_stmts, key))
 
-    mappings = {
-        'cluster_to_members': cluster_to_members,
-        'member_to_clusters': member_to_clusters,
-        'cluster_membership_key_mapping': cluster_membership_key_mapping,
-        'cluster_to_prototype': cluster_to_prototype,
-        'prototype_to_clusters': prototype_to_clusters,
-        'member_to_prototypes': member_to_prototypes,
-        'prototype_to_members': prototype_to_members,
+    mappings.update({
         'stmt_key_to_new_stmt': stmt_key_to_new_stmt,
         'new_stmt_to_stmt_key': new_stmt_to_stmt_key,
         'old_stmt_to_new_stmts': old_stmt_to_new_stmts,
         'new_stmt_to_old_stmts': new_stmt_to_old_stmts
-    }
+    })
 
     return mappings
 
