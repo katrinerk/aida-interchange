@@ -167,12 +167,12 @@ def compress_eres(input_graph_json, mappings, output_graph_json):
             same_as_cluster_entry = input_graph_json['theGraph'][cluster]
             output_graph_json['theGraph'][cluster] = same_as_cluster_entry
 
-            cluster_membership_key = \
-                mappings['cluster_membership_key_mapping'][(cluster, prototype)]
-            cluster_membership_entry = input_graph_json['theGraph'][
-                cluster_membership_key]
-            output_graph_json['theGraph'][
-                cluster_membership_key] = cluster_membership_entry
+            for cluster_membership_key in \
+                    mappings['cluster_membership_key_mapping'][(cluster, prototype)]:
+                cluster_membership_entry = input_graph_json['theGraph'][
+                    cluster_membership_key]
+                output_graph_json['theGraph'][
+                    cluster_membership_key] = cluster_membership_entry
 
         num_new_eres += 1
 

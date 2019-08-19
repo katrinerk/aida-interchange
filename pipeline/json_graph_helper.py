@@ -1,12 +1,14 @@
 from collections import Counter, defaultdict
 
 
-def build_cluster_member_mappings(graph_json):
+def build_cluster_member_mappings(graph_json, debug=False):
     # Build mappings between clusters and members, and mappings between
     # clusters and prototypes
+    print('\nBuilding mappings among clusters, members and prototypes ...')
+
     cluster_to_members = defaultdict(set)
     member_to_clusters = defaultdict(set)
-    cluster_membership_key_mapping = {}
+    cluster_membership_key_mapping = defaultdict(set)
 
     cluster_to_prototype = {}
     prototype_to_clusters = defaultdict(set)
@@ -20,8 +22,10 @@ def build_cluster_member_mappings(graph_json):
             cluster_to_members[cluster].add(member)
             member_to_clusters[member].add(cluster)
 
-            assert (cluster, member) not in cluster_membership_key_mapping
-            cluster_membership_key_mapping[(cluster, member)] = node_label
+            if debug and (cluster, member) in cluster_membership_key_mapping:
+                print('Warning: found duplicate ClusterMembership nodes for ({}, {})'.format(
+                    cluster, member))
+            cluster_membership_key_mapping[(cluster, member)].add(node_label)
 
         elif node['type'] == 'SameAsCluster':
             assert node_label not in cluster_to_prototype
@@ -40,19 +44,28 @@ def build_cluster_member_mappings(graph_json):
     print('\nConstructed mapping from {} clusters to {} members'.format(
         num_clusters, num_members))
 
-    clusters_per_member_counter = Counter(
-        [len(v) for v in member_to_clusters.values()])
+    clusters_per_member_counter = Counter([len(v) for v in member_to_clusters.values()])
     for key in sorted(clusters_per_member_counter.keys()):
         if key > 1:
             print(
                 '\tFor {} out of {} members, each belong to {} clusters'.format(
                     clusters_per_member_counter[key], num_members, key))
 
+    print('\nConstructed mapping from {} cluster-member pairs to '
+          'their ClusterMembership node labels'.format(len(cluster_membership_key_mapping)))
+
+    cm_node_per_pair_counter = Counter(len(v) for v in cluster_membership_key_mapping.values())
+    for key in sorted(cm_node_per_pair_counter.keys()):
+        if key > 1:
+            print(
+                '\tFor {} out of {} cluster-member pairs, each is associated with '
+                '{} ClusterMembership nodes'.format(
+                    cm_node_per_pair_counter[key], len(cluster_membership_key_mapping), key))
+
     print('\nConstructed mapping from {} clusters to {} prototypes'.format(
         num_clusters, num_prototypes))
 
-    clusters_per_prototype_counter = Counter(
-        [len(v) for v in prototype_to_clusters.values()])
+    clusters_per_prototype_counter = Counter([len(v) for v in prototype_to_clusters.values()])
     for key in sorted(clusters_per_prototype_counter.keys()):
         if key > 1:
             print(
@@ -78,8 +91,7 @@ def build_cluster_member_mappings(graph_json):
     print('\nConstructed mapping from {} members to {} prototypes'.format(
         num_members, num_prototypes))
 
-    prototypes_per_member_counter = Counter(
-        [len(v) for v in member_to_prototypes.values()])
+    prototypes_per_member_counter = Counter([len(v) for v in member_to_prototypes.values()])
     for key in sorted(prototypes_per_member_counter.keys()):
         if key > 1:
             print(
