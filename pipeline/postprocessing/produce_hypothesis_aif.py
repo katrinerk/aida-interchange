@@ -116,6 +116,7 @@ def build_subgraph_for_hypothesis(kb_graph, kb_nodes_by_category, kb_stmt_key_ma
                                   kb_cm_key_mapping, kb_type_stmt_key_mapping,
                                   graph_json, graph_mappings, hypothesis_id, prob,
                                   statements, statement_weights, children_to_parent,
+                                  cluster_memberships=None,
                                   patch_info_just_to_type_just=False,
                                   patch_type_just_to_info_just=False):
     member_to_clusters = graph_mappings['member_to_clusters']
@@ -197,27 +198,33 @@ def build_subgraph_for_hypothesis(kb_graph, kb_nodes_by_category, kb_stmt_key_ma
     proto_ere_set = set()
 
     logging.info('Processing all EREs and clusters')
-    for ere in ere_set:
-        for cluster in member_to_clusters[ere]:
-            # Add all corresponding cluster label of each ERE node to same_as_cluster_set
-            same_as_cluster_set.add(cluster)
+    if cluster_memberships is None:
+        for ere in ere_set:
+            for cluster in member_to_clusters[ere]:
+                # Add all corresponding cluster label of each ERE node to same_as_cluster_set
+                same_as_cluster_set.add(cluster)
 
-            # Find the ClusterMembership node in the KB
-            kb_cluster_membership_set.update(kb_cm_key_mapping[URIRef(cluster), URIRef(ere)])
-            # kb_cm_id = None
-            # for cm_label in cluster_membership_key_mapping[(cluster, ere)]:
-            #     if URIRef(cm_label) in kb_nodes_by_category['ClusterMembership']:
-            #         kb_cm_id = URIRef(cm_label)
-            #         break
-            # if kb_cm_id is None:
-            #     cm_label = next(iter(cluster_membership_key_mapping[(cluster, ere)]))
-            #     cm_entry = graph_json['theGraph'][cm_label]
-            #     kb_cm_id = match_cluster_membership_bnode(
-            #         kb_graph, cm_entry, kb_nodes_by_category, verbose=verbose)
-            #
-            # if kb_cm_id is not None:
-            #     # Add kb_cm_id to the set of KB ClusterMembership nodes
-            #     kb_cluster_membership_set.add(kb_cm_id)
+                # Find the ClusterMembership node in the KB
+                kb_cluster_membership_set.update(kb_cm_key_mapping[URIRef(cluster), URIRef(ere)])
+                # kb_cm_id = None
+                # for cm_label in cluster_membership_key_mapping[(cluster, ere)]:
+                #     if URIRef(cm_label) in kb_nodes_by_category['ClusterMembership']:
+                #         kb_cm_id = URIRef(cm_label)
+                #         break
+                # if kb_cm_id is None:
+                #     cm_label = next(iter(cluster_membership_key_mapping[(cluster, ere)]))
+                #     cm_entry = graph_json['theGraph'][cm_label]
+                #     kb_cm_id = match_cluster_membership_bnode(
+                #         kb_graph, cm_entry, kb_nodes_by_category, verbose=verbose)
+                #
+                # if kb_cm_id is not None:
+                #     # Add kb_cm_id to the set of KB ClusterMembership nodes
+                #     kb_cluster_membership_set.add(kb_cm_id)
+
+    else:
+        for member, cluster in cluster_memberships:
+            same_as_cluster_set.add(cluster)
+            kb_cluster_membership_set.update(kb_cm_key_mapping[URIRef(cluster), URIRef(member)])
 
             # Add the prototype of each SameAsCluster node to ere_set
             proto_ere = cluster_to_prototype[cluster]
@@ -535,6 +542,7 @@ def main():
                 prob=prob,
                 statements=hypothesis['statements'],
                 statement_weights=hypothesis['statementWeights'],
+                cluster_memberships=hypothesis.get('clusterMemberships', None),
                 children_to_parent=children_to_parent
             )
 
