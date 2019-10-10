@@ -200,7 +200,7 @@ class AidaHypothesis:
         return retv
 
     # String for whole hypothesis
-    def to_s(self):
+    def to_s(self, core_only = False):
         retv = ""
 
         retv += ", ".join(sorted(self.stmts, key = lambda s:self.stmt_weights[s], reverse = True)) + "\n\n"
@@ -210,7 +210,13 @@ class AidaHypothesis:
         for ere_id in core:
             if self.graph_obj.is_event(ere_id) or self.graph_obj.is_relation(ere_id):
                 retv += self.ere_to_s(ere_id) + "\n"
-                
+
+
+        if core_only:
+            return(retv)
+
+        retv += "------noncore starts here----------\n\n"
+        
         # make output for each event or relation in the hypothesis
         for ere_id in self.eres():
             if ere_id in core:
